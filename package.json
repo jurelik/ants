@@ -1,0 +1,23 @@
+{
+  "name": "ants",
+  "version": "1.0.0",
+  "description": "ants",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/jurelik/ants.git"
+  },
+  "author": "",
+  "license": "ISC",
+  "bugs": {
+    "url": "https://github.com/jurelik/ants/issues"
+  },
+  "homepage": "https://github.com/jurelik/ants#readme",
+  "dependencies": {
+    "mongoose": "^5.5.1",
+    "socket.io": "^2.2.0"
+  }
+}
