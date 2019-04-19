@@ -1,20 +1,23 @@
 const socketio = require('socket.io');
 const mongoose = require('mongoose');
 const User = require('./models/users');
-const readlineSync = require('readline-sync');
+const inquirer = require('inquirer');
 const io = socketio.listen(4000);
 
 //Connect to MongoDB
 function serverInit() {
 
-  let username = readlineSync.question('Enter username: ');
-  let password = readlineSync.question('Enter password: ', {hideEchoBack: true});
-  
-  mongoose.connect(`mongodb+srv://${username}:${password}@jl-cluster-test-24u6z.mongodb.net/ants?retryWrites=true`, {useNewUrlParser: true}, (err) => {
-    if (err) {
-      serverInit();
-    }
-  });
+  inquirer.prompt([
+    {type: 'input', message: 'Enter username:', name: 'username', prefix: '>'},
+    {type: 'password', message: 'Enter password:', name: 'password', prefix: '>', mask: true}
+  ])
+  .then(answer => {
+    mongoose.connect(`mongodb+srv://${answer.username}:${answer.password}@jl-cluster-test-24u6z.mongodb.net/ants?retryWrites=true`, {useNewUrlParser: true}, (err) => {
+      if (err) {
+        serverInit();
+      }
+    });
+  })
 };
 
 serverInit(); //Initialize connection
