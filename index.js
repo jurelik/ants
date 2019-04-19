@@ -37,13 +37,44 @@ mongoose.connection.once('open', () => {
 
 //Socket.IO
 io.on('connection', socket => {
-  socket.on('message', data => {
+  //Initial registration / login
+  socket.on('init', data => {
     if (data.type === 'register') {
-      let user = new User({
-        username: data.userData.username,
-        password: data.userData.password
+      User.findOne({username: data.userData.username}, (err, user) => {
+        if (!err && !user) {
+          let newUser = new User({
+            username: data.userData.username,
+            password: data.userData.password
+          });
+          newUser.save();
+          socket.emit('register', {type: 'success'});
+        }
+        else if (!err && user) {
+          socket.emit('register', {type: 'userExists'});
+        }
+        else {
+          socket.emit('register', {type: 'error'});
+        }
+      })
+      
+    }
+    else if(data.type === 'login') {
+      User.findOne({username: data.userData.username}, (err, user) => {
+        if(!err && user) {
+          if (data.userData.password === user.password) {
+            socket.emit('login', {type: 'loginSuccessful'});
+          }
+          else {
+            socket.emit('login', {type: 'loginFailed'});
+          }
+        }
+        else if (!err & !user) {
+          socket.emit('login', {type: 'loginFailed'});
+        }
+        else {
+          socket.emit('login', {type: 'error'});
+        }
       });
-      user.save();
     }
   });
 });
