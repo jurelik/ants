@@ -2,8 +2,10 @@ const inquirer = require('inquirer');
 const io = require('socket.io-client');
 
 const socket = io.connect('http://localhost:4000', {reconnectionAttempts: 3});
+let socketID;
 
 socket.on('connect', () => {
+  socketID = socket.id;
   console.log('Connection made.');
   login();
 }).on('connect_error', (err) => {
@@ -13,6 +15,7 @@ socket.on('connect', () => {
 socket.on('login', data => {
   if (data.type === 'loginSuccessful') {
     console.log('Login successful');
+    home();
   }
   else if (data.type === 'loginFailed') {
     console.log('Username or password incorrect. Please try again.');
@@ -33,6 +36,20 @@ socket.on('register', data => {
     console.error('Error occured when registering, please try again.');
     login();
   }
+});
+
+socket.on('ls', data => {
+  console.log(data);
+  home();
+});
+
+socket.on('join', data => {
+  console.log(`Joined room '${data.room}'`);
+  room(data.room);
+});
+
+socket.on('message', data => {
+  console.log(data.message);
 });
 
 //Login
@@ -64,3 +81,23 @@ function login() {
   });
 };
 
+//Home
+function home() {
+  inquirer.prompt({type: 'input', name: 'option', prefix: '>'})
+  .then(answer => {
+    if (answer.option === 'ls') {
+      socket.emit('ls');
+    }
+    else if(answer.option.startsWith('/join ')) {
+      let room = answer.option.slice(6);
+      socket.emit('join', {room: room});
+    }
+  });
+}
+
+function room(room) {
+  inquirer.prompt({type: 'input', name: 'message', prefix: '>'})
+  .then(res => {
+    socket.emit('message', {message: res.message, room: room});
+  });
+}
