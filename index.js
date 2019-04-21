@@ -40,8 +40,6 @@ mongoose.connection.once('open', () => {
 //Socket.IO
 io.on('connection', socket => {
   clients.push(socket.id);
-  console.log(clients);
-  console.log(socket.rooms);
   //Initial registration / login
   socket.on('init', data => {
     if (data.type === 'register') {
@@ -84,13 +82,13 @@ io.on('connection', socket => {
   });
 
   socket.on('ls', () => {
-    socket.emit('ls', listRooms(socket, clients));
+    socket.emit('ls', listRooms(socket));
   });
 
   socket.on('join', data => {
     socket.join(data.room, () => {
-      console.log(Object.keys(socket.rooms));
-      socket.emit('join', data.room)
+      console.log(data.room);
+      socket.emit('join', {room: data.room})
     });
   });
 
@@ -100,16 +98,18 @@ io.on('connection', socket => {
   });
 
   socket.on('message', data => {
-    io.to(data.room).emit(data.message);
+    io.to(data.room).emit('message', {message: data.message});
   });
 });
 
-function listRooms(socket, clients) {
-  // console.log(socket.rooms); 
-  let socketRooms = Object.keys(socket.rooms);
-  // console.log('before: ' + socketRooms)
+function listRooms(socket) {
+  let socketRooms = Object.keys(io.sockets.adapter.rooms);
+  console.log(socketRooms);
 
-  socketRooms.splice(socketRooms.indexOf(socket.id), 1);
+  clients.forEach(client => {
+    socketRooms.splice(socketRooms.indexOf(client), 1);
+  });
+  // socketRooms.splice(socketRooms.indexOf(socket.id), 1);
 
   // console.log('after: ' + socketRooms)
 
