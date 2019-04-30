@@ -1,103 +1,137 @@
-const inquirer = require('inquirer');
+const sl = require('staylow');
 const io = require('socket.io-client');
 
 const socket = io.connect('http://localhost:4000', {reconnectionAttempts: 3});
+sl.defaultPrompt('');
 let socketID;
+let connected = false;
 
+//
+//SOCKET EVENTS
+//
+
+//On connect
 socket.on('connect', () => {
   socketID = socket.id;
-  console.log('Connection made.');
+  sl.log('Connection made.');
   login();
 }).on('connect_error', (err) => {
-  console.log("Can't connect to server.");
+  sl.log("Can't connect to server.");
 });
 
+//On login
 socket.on('login', data => {
   if (data.type === 'loginSuccessful') {
-    console.log('Login successful');
-    home();
+    sl.log('Login successful');
+    home(data.username);
   }
   else if (data.type === 'loginFailed') {
-    console.log('Username or password incorrect. Please try again.');
-    login();
-  }
-});
-
-socket.on('register', data => {
-  if (data.type === 'success') {
-    console.log('Registration successful.');
-    login();
-  }
-  else if (data.type === 'userExists') {
-    console.log('Username already exists.');
+    sl.log('Login failed');
     login();
   }
   else {
-    console.error('Error occured when registering, please try again.');
-    login();
+    sl.log('Error: ' + data.error)
   }
 });
 
+//On list
 socket.on('ls', data => {
-  console.log(data);
-  home();
+  sl.log(data.rooms);
+  home(data.username);
 });
 
+//On join
 socket.on('join', data => {
-  console.log(`Joined room '${data.room}'`);
-  room(data.room);
+  sl.log(`Room successfully joined: ${data.room}`);
+  room(data.room, data.username);
 });
 
+//On message
 socket.on('message', data => {
-  console.log(data.message);
+  sl.log(`${data.username}: ${data.message}`);
 });
 
-//Login
+//Function declarations
+function chat() {
+  sl.prompt('').then(res => {
+    socket.emit('message', {message: res} );
+    chat();
+  });
+};
+
 function login() {
-  inquirer.prompt({type: 'input', message: '!l to login or !n to create new account:', name: 'input', prefix: '>'})
-  .then(answer => {
-    if (answer.input === '!n') {
-      inquirer.prompt([
-        {type: 'input', message: 'Enter username:', name: 'username', prefix: '>'},
-        {type: 'password', message: 'Enter password:', name: 'password', mask: true, prefix: '>'}
-      ])
-      .then(answer => {
-        socket.emit('init',{type: 'register', userData: {username: answer.username, password: answer.password}});
-      });
-    }
-    else if (answer.input === '!l'){
-      inquirer.prompt([
-        {type: 'input', message: 'Enter username:', name: 'username', prefix: '>'},
-        {type: 'password', message: 'Enter password:', name: 'password', mask: true, prefix: '>'}
-      ])
-      .then(answer => {
-        socket.emit('init', {type: 'login', userData: {username: answer.username, password: answer.password}});
-      })
+  if (connected === false) {
+    clear();
+    sl.log(``);
+    sl.log(`
+  アリ
+
+  
+             ,
+    _,-'\\   /|   .    .    /\`.
+_,-'     \\_/_|_  |\\   |\`. /   \`._,--===--.__
+^       _/"/  " \\ : \\__|_ /.   ,'    :.  :. .\`-._
+      // ^   /7 t'""    "\`-._/ ,'\\   :   :  :  .\`.
+      Y      L/ )\         ]],'   \\  :   :  :   : \`.
+      |        /  \`.n_n_n,','\\_    \\ ;   ;  ;   ;  _>
+      |__    ,'     |  \\\`-'    \`-.__\\_______.==---'
+     //  \`""\\\\      |   \\            \\
+     \\|     |/      /    \\            \\
+                   /     |             \`.
+                  /      |               ^
+                 ^       |
+                 
+                 `)
+    sl.log('Welcome to ants. To create a new account please enter /n');
+    connected = true;
+  }
+  sl.prompt('Enter username: ', res => {
+    if (res.startsWith('/')) {
+      if(res.slice(1) === 'n') {
+        sl.log('ayyy');
+      }
+      else {
+        sl.log('Command not recognized.');
+        login();
+      }
     }
     else {
-      console.log('Command not recognized.');
-      login();
+      let username = res;
+      sl.prompt('Enter password: ', true, res => {
+        socket.emit('login', {username: username, password: res});
+      });
     }
   });
 };
 
-//Home
-function home() {
-  inquirer.prompt({type: 'input', name: 'option', prefix: '>'})
-  .then(answer => {
-    if (answer.option === 'ls') {
-      socket.emit('ls');
+function home(username) {
+  sl.prompt('', false, res => {
+    if (res === 'ls') {
+      socket.emit('ls', {username: username});
     }
-    else if(answer.option.startsWith('/join ')) {
-      let room = answer.option.slice(6);
-      socket.emit('join', {room: room});
+    else if (res.startsWith('/join ')) {
+      let room = res.slice(6);
+      socket.emit('join', {room: room, username: username});
+    }
+    else {
+      sl.log('Command not found')
+      home(username);
     }
   });
-}
+};
 
-function room(room) {
-  inquirer.prompt({type: 'input', name: 'message', prefix: '>'})
-  .then(res => {
-    socket.emit('message', {message: res.message, room: room});
-  });
+function room(roomName, username) {
+  sl.prompt('', res => {
+    if (res.startsWith('/')) {
+
+    }
+    else {
+      socket.emit('message', {message: res, room: roomName, username: username});
+      room(roomName, username);
+    }
+  })
+};
+
+function clear() {
+  process.stdout.write('\x1b[2J');
 }
