@@ -46,16 +46,24 @@ io.on('connection', socket => {
 
   //Login event
   socket.on('login', data => {
-    User.findOne({username: data.username}, (err, user) => {
+    User.findOne({name: data.name}, (err, user) => {
       if (!err && user) { //If user exists
-        if (user.password === data.password) { //If password is correct
-          jwt.sign({username: data.username}, privateKey, {algorithm: 'RS256'}, (err, token) => {
+        if (user.pw === data.pw) { //If password is correct
+          User.updateOne({name: data.name}, {id: socket.id}, (err, raw) => { //Update id to current session socket.id
             if (!err) {
-              socket.emit('login', {type: 'loginSuccessful', username: data.username, token: token});
+              //Create jwtToken
+              jwt.sign({name: data.name, id: socket.id}, privateKey, {algorithm: 'RS256', expiresIn: '1d'}, (err, token) => {
+                if (!err) {
+                  socket.emit('login', {type: 'loginSuccessful', name: data.name, token: token});
+                }
+                else {
+                  socket.emit('login', {type: 'error', error: err});
+                  sl.log(err);
+                }
+              });
             }
             else {
               socket.emit('login', {type: 'error', error: err});
-              sl.log(err);
             }
           });
         }
@@ -74,8 +82,8 @@ io.on('connection', socket => {
 
   //Register event
   socket.on('register', data => {
-    let user = new User({username: data.username, password: data.password, userID: generateUserID()});
-    User.findOne({username: user.username}, (err, docs) => {
+    let user = new User({name: data.name, pw: data.pw, id: socket.id});
+    User.findOne({name: user.name}, (err, docs) => {
       if (!docs && !err) {
         user.save(err => {
           if (!err) {
@@ -143,6 +151,6 @@ function defaultPrompt() {
   });
 };
 
-function generateUserID() {
-  return Math.round(((Math.random() + 1) * Date.now())).toString();
-}
+// function generateUserID() {
+//   return Math.round(((Math.random() + 1) * Date.now())).toString();
+// }

@@ -3,9 +3,9 @@ const io = require('socket.io-client');
 
 const socket = io.connect('http://localhost:4000', {reconnectionAttempts: 3});
 sl.defaultPrompt('');
-let socketID;
 let connected = false;
 let jwtToken;
+let name;
 
 //
 //SOCKET EVENTS
@@ -24,8 +24,10 @@ socket.on('connect', () => {
 socket.on('login', data => {
   if (data.type === 'loginSuccessful') {
     jwtToken = data.token;
+    name = data.name;
     sl.log('Login successful');
-    home(data.username);
+    sl.log(jwtToken);
+    home();
   }
   else if (data.type === 'loginFailed') {
     sl.log('Username or password incorrect.');
@@ -107,7 +109,6 @@ _,-'     \\_/_|_  |\\   |\`. /   \`._,--===--.__
     sl.log('Welcome to ants. To create a new account please enter /n');
     connected = true;
   }
-  sl.log('LOGIN');
   sl.prompt('Enter username: ', res => {
     if (res.startsWith('/')) {
       if(res.slice(1) === 'n') {
@@ -121,7 +122,7 @@ _,-'     \\_/_|_  |\\   |\`. /   \`._,--===--.__
     else {
       let username = res;
       sl.prompt('Enter password: ', true, res => {
-        socket.emit('login', {username: username, password: res});
+        socket.emit('login', {name: username, pw: res});
       });
     }
   });
@@ -132,35 +133,35 @@ function register() {
   sl.prompt('Enter username: ', res => {
     let username = res;
     sl.prompt('Enter password: ', true, res => {
-      socket.emit('register', {username, password: res});
+      socket.emit('register', {name: username, pw: res});
     })
   });
 }
 
-function home(username) {
+function home() {
   sl.prompt('', false, res => {
     if (res === 'ls') {
-      socket.emit('ls', {username: username, token: jwtToken});
+      socket.emit('ls', {name, token: jwtToken});
     }
     else if (res.startsWith('/join ')) {
       let room = res.slice(6);
-      socket.emit('join', {room: room, username: username});
+      socket.emit('join', {room: room, name});
     }
     else {
       sl.log('Command not found')
-      home(username);
+      home();
     }
   });
 };
 
-function room(roomName, username) {
+function room(roomName) {
   sl.prompt('', res => {
     if (res.startsWith('/')) {
 
     }
     else {
-      socket.emit('message', {message: res, room: roomName, username: username});
-      room(roomName, username);
+      socket.emit('message', {message: res, room: roomName, name});
+      room(roomName);
     }
   })
 };
