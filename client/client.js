@@ -5,6 +5,7 @@ const socket = io.connect('http://localhost:4000', {reconnectionAttempts: 3});
 sl.defaultPrompt('');
 let socketID;
 let connected = false;
+let jwtToken;
 
 //
 //SOCKET EVENTS
@@ -22,15 +23,36 @@ socket.on('connect', () => {
 //On login
 socket.on('login', data => {
   if (data.type === 'loginSuccessful') {
+    jwtToken = data.token;
     sl.log('Login successful');
     home(data.username);
   }
   else if (data.type === 'loginFailed') {
-    sl.log('Login failed');
+    sl.log('Username or password incorrect.');
     login();
   }
   else {
     sl.log('Error: ' + data.error)
+  }
+});
+
+//On register
+socket.on('register', data => {
+  if (data.type === 'success') {
+    sl.log('Account created');
+    login();
+  }
+  else if (data.type === 'userExists') {
+    sl.log('User already exists')
+    register();
+  }
+  else if (data.type === 'failed') {
+    sl.log('Error: ' + data.err);
+    register();
+  }
+  else {
+    sl.log('Error: Unknown');
+    register();
   }
 });
 
@@ -85,10 +107,11 @@ _,-'     \\_/_|_  |\\   |\`. /   \`._,--===--.__
     sl.log('Welcome to ants. To create a new account please enter /n');
     connected = true;
   }
+  sl.log('LOGIN');
   sl.prompt('Enter username: ', res => {
     if (res.startsWith('/')) {
       if(res.slice(1) === 'n') {
-        sl.log('ayyy');
+        register();
       }
       else {
         sl.log('Command not recognized.');
@@ -104,10 +127,20 @@ _,-'     \\_/_|_  |\\   |\`. /   \`._,--===--.__
   });
 };
 
+function register() {
+  sl.log('REGISTER');
+  sl.prompt('Enter username: ', res => {
+    let username = res;
+    sl.prompt('Enter password: ', true, res => {
+      socket.emit('register', {username, password: res});
+    })
+  });
+}
+
 function home(username) {
   sl.prompt('', false, res => {
     if (res === 'ls') {
-      socket.emit('ls', {username: username});
+      socket.emit('ls', {username: username, token: jwtToken});
     }
     else if (res.startsWith('/join ')) {
       let room = res.slice(6);

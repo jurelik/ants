@@ -2,14 +2,17 @@ const sl = require('staylow');
 const socketio = require('socket.io');
 const mongoose = require('mongoose');
 const User = require('./models/users');
+const fs = require('fs');
+const jwt = require('jsonwebtoken');
 
 const io = socketio.listen(4000);
 sl.defaultPrompt('');
 
+const privateKey = fs.readFileSync('./private.key', 'utf8');
+const publicKey = fs.readFileSync('./public.key', 'utf8')
 const clients = [];
 
 function serverInit() {
-
   sl.prompt('Enter username: ', res => {
     let username = res;
     sl.prompt('Enter password: ', true, res => {
@@ -44,9 +47,17 @@ io.on('connection', socket => {
   //Login event
   socket.on('login', data => {
     User.findOne({username: data.username}, (err, user) => {
-      if (!err && user) {
-        if (user.password === data.password) {
-          socket.emit('login', {type: 'loginSuccessful', username: data.username});
+      if (!err && user) { //If user exists
+        if (user.password === data.password) { //If password is correct
+          jwt.sign({username: data.username}, privateKey, {algorithm: 'RS256'}, (err, token) => {
+            if (!err) {
+              socket.emit('login', {type: 'loginSuccessful', username: data.username, token: token});
+            }
+            else {
+              socket.emit('login', {type: 'error', error: err});
+              sl.log(err);
+            }
+          });
         }
         else {
           socket.emit('login', {type: 'loginFailed'});
@@ -61,9 +72,39 @@ io.on('connection', socket => {
     });
   });
 
+  //Register event
+  socket.on('register', data => {
+    let user = new User({username: data.username, password: data.password, userID: generateUserID()});
+    User.findOne({username: user.username}, (err, docs) => {
+      if (!docs && !err) {
+        user.save(err => {
+          if (!err) {
+            socket.emit('register', {type: 'success'});
+          }
+          else {
+            socket.emit('register', {type: 'failed', err: err});
+          }
+        });
+      }
+      else if (docs && !err) {
+        socket.emit('register', {type: 'userExists'});
+      }
+      else {
+        socket.emit('register', {type: 'failed', err: err});
+      }
+    });
+  });
+
   //List event
   socket.on('ls', data => {
-    socket.emit('ls', {rooms: listRooms(), username: data.username});
+    jwt.verify(data.token, publicKey, (err, decoded) => {
+      if (!err) {
+        socket.emit('ls', {rooms: listRooms(), username: data.username, token: data.token});
+      }
+      else {
+        sl.log(err);
+      }
+    });
   });
 
   //Join room event
@@ -101,3 +142,7 @@ function defaultPrompt() {
     defaultPrompt();
   });
 };
+
+function generateUserID() {
+  return Math.round(((Math.random() + 1) * Date.now())).toString();
+}
