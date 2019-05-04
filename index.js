@@ -82,7 +82,7 @@ io.on('connection', socket => {
 
   //Register event
   socket.on('register', data => {
-    let user = new User({name: data.name, pw: data.pw, id: socket.id});
+    let user = new User({name: data.name, pw: data.pw, salt: data.salt, id: socket.id});
     User.findOne({name: user.name}, (err, docs) => {
       if (!docs && !err) {
         user.save(err => {
@@ -99,6 +99,21 @@ io.on('connection', socket => {
       }
       else {
         socket.emit('register', {type: 'failed', err: err});
+      }
+    });
+  });
+
+  //getSalt event
+  socket.on('getSalt', data => {
+    User.findOne({name: data.name}, (err, res) => {
+      if (!err && res) {
+        socket.emit('getSalt', {type: 'success', name: data.name, salt: res.salt});
+      }
+      else if (!err && !res) {
+        socket.emit('getSalt', {type: 'noUser'})
+      }
+      else {
+        socket.emit('getSalt', {type: 'error', err});
       }
     });
   });

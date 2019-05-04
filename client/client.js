@@ -1,5 +1,6 @@
 const sl = require('staylow');
 const io = require('socket.io-client');
+const crypto = require('crypto');
 
 const socket = io.connect('http://localhost:4000', {reconnectionAttempts: 3});
 sl.defaultPrompt('');
@@ -26,7 +27,6 @@ socket.on('login', data => {
     jwtToken = data.token;
     name = data.name;
     sl.log('Login successful');
-    sl.log(jwtToken);
     home();
   }
   else if (data.type === 'loginFailed') {
@@ -55,6 +55,43 @@ socket.on('register', data => {
   else {
     sl.log('Error: Unknown');
     register();
+  }
+});
+
+socket.on('getSalt', data => {
+  if (data.type === 'success') {
+    sl.prompt('Enter password: ', true, res => {
+      crypto.pbkdf2(res, data.salt, 100000, 128, 'sha512', (err, derivedKey) => {
+        if (!err) {
+          socket.emit('login', {name: data.name, pw: derivedKey.toString('base64')})
+        }
+        else {
+          sl.log('Error: ' + err);
+          login();
+        }
+      });
+    });
+  }
+  else if (data.type === 'noUser') {
+    sl.prompt('Enter password: ', true, res => {
+      let salt = crypto.randomBytes(128).toString('base64');
+      crypto.pbkdf2(res, salt, 100000, 128, 'sha512', (err, derivedKey) => {
+        if (!err) {
+          socket.emit('login', {name: data.name, pw: derivedKey.toString('base64')})
+        }
+        else {
+          sl.log('Error: ' + err);
+          login();
+        }
+      });
+    });
+  }
+  else if (data.type === 'error') {
+    sl.log('Error: ' + data.err);
+    login();
+  }
+  else {
+    sl.log('Error: Unknown');
   }
 });
 
@@ -121,9 +158,10 @@ _,-'     \\_/_|_  |\\   |\`. /   \`._,--===--.__
     }
     else {
       let username = res;
-      sl.prompt('Enter password: ', true, res => {
-        socket.emit('login', {name: username, pw: res});
-      });
+      socket.emit('getSalt', {name: username});
+      // sl.prompt('Enter password: ', true, res => {
+      //   socket.emit('login', {name: username, pw: res});
+      // });
     }
   });
 };
@@ -133,7 +171,16 @@ function register() {
   sl.prompt('Enter username: ', res => {
     let username = res;
     sl.prompt('Enter password: ', true, res => {
-      socket.emit('register', {name: username, pw: res});
+      let salt = crypto.randomBytes(128).toString('base64');
+      crypto.pbkdf2(res, salt, 100000, 128, 'sha512', (err, derivedKey) => {
+        if (!err) {
+          socket.emit('register', {name: username, pw: derivedKey.toString('base64'), salt});
+        }
+        else {
+          sl.log('Error: ' + err);
+          register();
+        }
+      });
     })
   });
 }
@@ -168,4 +215,14 @@ function room(roomName) {
 
 function clear() {
   process.stdout.write('\x1b[2J');
+}
+
+//Hash password
+function hashPw(registration) {
+  if (!registration) {
+
+  }
+  else {
+
+  }
 }
