@@ -4,6 +4,7 @@ const mongoose = require('mongoose');
 const User = require('./models/users');
 const fs = require('fs');
 const jwt = require('jsonwebtoken');
+const crypto = require('crypto');
 
 const io = socketio.listen(4000);
 sl.defaultPrompt('');
@@ -49,7 +50,7 @@ io.on('connection', socket => {
     User.findOne({name: data.name}, (err, user) => {
       if (!err && user) { //If user exists
         if (user.pw === data.pw) { //If password is correct
-          User.updateOne({name: data.name}, {id: socket.id}, (err, raw) => { //Update id to current session socket.id
+          User.updateOne({name: data.name}, {id: socket.id, pubKey: data.pubKey}, (err, raw) => { //Update id to current session socket.id
             if (!err) {
               //Create jwtToken
               jwt.sign({name: data.name, id: socket.id}, privateKey, {algorithm: 'RS256', expiresIn: '1d'}, (err, token) => {
@@ -82,8 +83,8 @@ io.on('connection', socket => {
 
   //Register event
   socket.on('register', data => {
-    let user = new User({name: data.name, pw: data.pw, salt: data.salt, id: socket.id});
-    User.findOne({name: user.name}, (err, docs) => {
+    let user = new User({name: data.name, pw: data.pw, salt: data.salt, id: socket.id, pubKey: ''});
+    User.findOne({name: user.name}, (err, docs) => { //Check if user exists already
       if (!docs && !err) {
         user.save(err => {
           if (!err) {
@@ -105,12 +106,13 @@ io.on('connection', socket => {
 
   //getSalt event
   socket.on('getSalt', data => {
-    User.findOne({name: data.name}, (err, res) => {
+    User.findOne({name: data.name}, (err, res) => { //Check if user exists
       if (!err && res) {
         socket.emit('getSalt', {type: 'success', name: data.name, salt: res.salt});
       }
       else if (!err && !res) {
-        socket.emit('getSalt', {type: 'noUser'})
+        let salt = crypto.randomBytes(128).toString('base64');
+        socket.emit('getSalt', {type: 'success', name: data.name, salt})
       }
       else {
         socket.emit('getSalt', {type: 'error', err});

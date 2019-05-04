@@ -3,6 +3,7 @@ const readline = require('readline');
 let buffer = []; //Buffer of pressed keys
 let muted = false; //Is mute active?
 let defaultPrompt = '> '; //Default prompt
+let globalMask = '*'; 
 
 const rl = readline.createInterface({
   input: process.stdin,
@@ -19,7 +20,7 @@ process.stdin.on('keypress', (val, key) => {
         process.stdout.cursorTo(0);
         process.stdout.write(buffer[0]);
         for (x = 1; x < buffer.length; x++) {
-          process.stdout.write('*');
+          process.stdout.write(globalMask);
         }
       }
     }
@@ -32,7 +33,7 @@ process.stdin.on('keypress', (val, key) => {
 //Change the readline logging function
 rl._writeToOutput = function _writeToOutput(stringToWrite) {
   if (muted === true) {
-    rl.output.write('*');
+    rl.output.write(globalMask);
   }
   else {
     rl.output.write(stringToWrite);
@@ -47,15 +48,6 @@ exports.log = function(text) {
   process.stdout.clearLine();
   process.stdout.cursorTo(0);
   console.log(text);
-  if (muted === true) {
-    process.stdout.write(buffer[0]);
-    for (x = 1; x < buffer.length; x++) {
-      process.stdout.write('*');
-    }
-  }
-  else {
-    process.stdout.write(buffer.join(''));
-  }
 };
 
 //Custom prompt function
@@ -72,7 +64,6 @@ exports.prompt = function(question, mute, callback) {
       mute = false;
     }
     else if (typeof arguments[1] != 'boolean' || typeof arguments[2] != 'function') {
-      console.log(arguments);
       throw new Error('Prompt function parameters are not set correctly.');
     }
     //Change the readline question function
@@ -103,11 +94,12 @@ exports.prompt = function(question, mute, callback) {
     rl.question(question, (res) => {
       //Redraw input on enter
       if (muted === true) {
+        rl.history.shift();
         process.stdout.clearLine();
         process.stdout.cursorTo(0);
         process.stdout.write(buffer[0]);
         for (x = 1; x < buffer.length; x++) {
-          process.stdout.write('*');
+          process.stdout.write(globalMask);
         }
         process.stdout.write('\n');
       }
@@ -129,4 +121,12 @@ exports.prompt = function(question, mute, callback) {
 exports.defaultPrompt = function(prompt) {
   defaultPrompt = prompt;
 };
+
+//Helper function for changing the value of mask
+/**
+ * @param {String} mask
+ */
+exports.setMask = function(mask) {
+  globalMask = mask;
+}
 

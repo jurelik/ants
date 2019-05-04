@@ -6,6 +6,7 @@ const socket = io.connect('http://localhost:4000', {reconnectionAttempts: 3});
 sl.defaultPrompt('');
 let connected = false;
 let jwtToken;
+let privateKey;
 let name;
 
 //
@@ -58,26 +59,34 @@ socket.on('register', data => {
   }
 });
 
+//On getSalt
 socket.on('getSalt', data => {
   if (data.type === 'success') {
     sl.prompt('Enter password: ', true, res => {
+      //Hash password before sending to server
       crypto.pbkdf2(res, data.salt, 100000, 128, 'sha512', (err, derivedKey) => {
         if (!err) {
-          socket.emit('login', {name: data.name, pw: derivedKey.toString('base64')})
-        }
-        else {
-          sl.log('Error: ' + err);
-          login();
-        }
-      });
-    });
-  }
-  else if (data.type === 'noUser') {
-    sl.prompt('Enter password: ', true, res => {
-      let salt = crypto.randomBytes(128).toString('base64');
-      crypto.pbkdf2(res, salt, 100000, 128, 'sha512', (err, derivedKey) => {
-        if (!err) {
-          socket.emit('login', {name: data.name, pw: derivedKey.toString('base64')})
+          //Generate RSA key pair
+          crypto.generateKeyPair('rsa', {
+            modulusLength: 2048,
+            publicKeyEncoding: {
+              type: 'spki',
+              format: 'pem'
+            },
+            privateKeyEncoding: {
+              type: 'pkcs8',
+              format: 'pem'
+            }
+          }, (err, publicKey, privateKey) => {
+            if (!err) {
+              privateKey = privateKey;
+              socket.emit('login', {name: data.name, pw: derivedKey.toString('base64'), pubKey: publicKey})
+            }
+            else {
+              sl.log(err);
+              login();
+            }
+          });
         }
         else {
           sl.log('Error: ' + err);
@@ -125,7 +134,7 @@ function login() {
     clear();
     sl.log(``);
     sl.log(`
-  アリ
+  
 
   
              ,
@@ -140,7 +149,7 @@ _,-'     \\_/_|_  |\\   |\`. /   \`._,--===--.__
      \\|     |/      /    \\            \\
                    /     |             \`.
                   /      |               ^
-                 ^       |
+                 ^       |                         アリ
                  
                  `)
     sl.log('Welcome to ants. To create a new account please enter /n');
@@ -159,9 +168,6 @@ _,-'     \\_/_|_  |\\   |\`. /   \`._,--===--.__
     else {
       let username = res;
       socket.emit('getSalt', {name: username});
-      // sl.prompt('Enter password: ', true, res => {
-      //   socket.emit('login', {name: username, pw: res});
-      // });
     }
   });
 };
@@ -171,6 +177,7 @@ function register() {
   sl.prompt('Enter username: ', res => {
     let username = res;
     sl.prompt('Enter password: ', true, res => {
+      //Hash password before sending to server
       let salt = crypto.randomBytes(128).toString('base64');
       crypto.pbkdf2(res, salt, 100000, 128, 'sha512', (err, derivedKey) => {
         if (!err) {
@@ -215,14 +222,4 @@ function room(roomName) {
 
 function clear() {
   process.stdout.write('\x1b[2J');
-}
-
-//Hash password
-function hashPw(registration) {
-  if (!registration) {
-
-  }
-  else {
-
-  }
 }
