@@ -8,6 +8,7 @@ let connected = false;
 let jwtToken;
 let privateKey;
 let name;
+let user = {};
 
 //
 //SOCKET EVENTS
@@ -15,7 +16,6 @@ let name;
 
 //On connect
 socket.on('connect', () => {
-  socketID = socket.id;
   sl.log('Connection made.');
   login();
 }).on('connect_error', (err) => {
@@ -25,8 +25,9 @@ socket.on('connect', () => {
 //On login
 socket.on('login', data => {
   if (data.type === 'loginSuccessful') {
-    jwtToken = data.token;
-    name = data.name;
+    user.token = data.token;
+    user.name = data.name;
+    user.id = socket.id;
     sl.log('Login successful');
     home();
   }
@@ -68,15 +69,7 @@ socket.on('getSalt', data => {
         if (!err) {
           //Generate RSA key pair
           crypto.generateKeyPair('rsa', {
-            modulusLength: 2048,
-            publicKeyEncoding: {
-              type: 'spki',
-              format: 'pem'
-            },
-            privateKeyEncoding: {
-              type: 'pkcs8',
-              format: 'pem'
-            }
+            modulusLength: 2048
           }, (err, publicKey, privateKey) => {
             if (!err) {
               privateKey = privateKey;
@@ -106,14 +99,34 @@ socket.on('getSalt', data => {
 
 //On list
 socket.on('ls', data => {
-  sl.log(data.rooms);
-  home(data.username);
+  if (data.type === 'success') {
+    sl.log(data.rooms);
+    home();
+  }
+  else if (data.type === 'failed') {
+    sl.log('Error' + data.err);
+    home();
+  }
+  else {
+    sl.log('Error: Unknown');
+    home();
+  }
 });
 
 //On join
 socket.on('join', data => {
-  sl.log(`Room successfully joined: ${data.room}`);
-  room(data.room, data.username);
+  if (data.type === 'success') {
+    sl.log(`Room successfully joined: ${data.room}`);
+    room(data.room);
+  }
+  else if (data.type === 'failed') {
+    sl.log('Error: ' + data.err);
+    home();
+  }
+  else {
+    sl.log('Error: Unknown');
+    home();
+  }
 });
 
 //On message
@@ -195,11 +208,11 @@ function register() {
 function home() {
   sl.prompt('', false, res => {
     if (res === 'ls') {
-      socket.emit('ls', {name, token: jwtToken});
+      socket.emit('ls', {user});
     }
     else if (res.startsWith('/join ')) {
       let room = res.slice(6);
-      socket.emit('join', {room: room, name});
+      socket.emit('join', {room, user});
     }
     else {
       sl.log('Command not found')

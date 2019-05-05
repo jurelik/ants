@@ -83,7 +83,7 @@ io.on('connection', socket => {
 
   //Register event
   socket.on('register', data => {
-    let user = new User({name: data.name, pw: data.pw, salt: data.salt, id: socket.id, pubKey: ''});
+    let user = new User({name: data.name, pw: data.pw, salt: data.salt, id: socket.id, pubKey: {}});
     User.findOne({name: user.name}, (err, docs) => { //Check if user exists already
       if (!docs && !err) {
         user.save(err => {
@@ -122,25 +122,34 @@ io.on('connection', socket => {
 
   //List event
   socket.on('ls', data => {
-    jwt.verify(data.token, publicKey, (err, decoded) => {
+    jwt.verify(data.user.token, publicKey, (err, decoded) => {
       if (!err) {
-        socket.emit('ls', {rooms: listRooms(), username: data.username, token: data.token});
+        socket.emit('ls', {type: 'success', rooms: listRooms()});
       }
       else {
         sl.log(err);
+        socket.emit('ls', {type: 'failed', err});
       }
     });
   });
 
   //Join room event
   socket.on('join', data => {
-    socket.join(data.room, (err) => {
+    jwt.verify(data.user.token, publicKey, (err, decoded) => {
       if (!err) {
-        socket.emit('join', {type: 'success', room: data.room, username: data.username});
+        socket.join(data.room, (err) => {
+          if (!err) {
+            socket.emit('join', {type: 'success', room: data.room});
+          }
+          else {
+            sl.log(err);
+            socket.emit('join', {type: 'failed', err});
+          }
+        });
       }
       else {
         sl.log(err);
-        socket.emit(join, {type: 'failed', username: data.username})
+        socket.emit('join', {type: 'failed', err});
       }
     });
   });
@@ -167,7 +176,3 @@ function defaultPrompt() {
     defaultPrompt();
   });
 };
-
-// function generateUserID() {
-//   return Math.round(((Math.random() + 1) * Date.now())).toString();
-// }
