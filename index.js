@@ -2,6 +2,7 @@ const sl = require('staylow');
 const socketio = require('socket.io');
 const mongoose = require('mongoose');
 const User = require('./models/users');
+const Room = require('./models/rooms');
 const fs = require('fs');
 const jwt = require('jsonwebtoken');
 const crypto = require('crypto');
@@ -124,7 +125,18 @@ io.on('connection', socket => {
   socket.on('ls', data => {
     jwt.verify(data.user.token, publicKey, (err, decoded) => {
       if (!err) {
-        socket.emit('ls', {type: 'success', rooms: listRooms()});
+        Room.find({}, (err, res) => {
+          if (!err) {
+            let roomList = [];
+            res.forEach(room => {
+              roomList.push(room.name);
+            });
+            socket.emit('ls', {type: 'success', rooms: roomList});
+          }
+          else {
+            socket.emit('ls', {type: 'failed', err});
+          }
+        });
       }
       else {
         sl.log(err);
@@ -137,15 +149,22 @@ io.on('connection', socket => {
   socket.on('join', data => {
     jwt.verify(data.user.token, publicKey, (err, decoded) => {
       if (!err) {
-        socket.join(data.room, (err) => {
-          if (!err) {
-            socket.emit('join', {type: 'success', room: data.room});
-          }
-          else {
-            sl.log(err);
-            socket.emit('join', {type: 'failed', err});
-          }
+        Room.findOne({name: data.room}, (err, res) => {
+          res.users = {default: 'default'};
+          res.users[data.user.name] = data.user;
+          res.save(() => {
+            
+          });
         });
+        // socket.join(data.room, (err) => {
+        //   if (!err) {
+        //     socket.emit('join', {type: 'success', room: data.room});
+        //   }
+        //   else {
+        //     sl.log(err);
+        //     socket.emit('join', {type: 'failed', err});
+        //   }
+        // });
       }
       else {
         sl.log(err);
@@ -154,22 +173,41 @@ io.on('connection', socket => {
     });
   });
 
+  //Create room event
+  socket.on('create', data => {
+    jwt.verify(data.user.token, publicKey, (err, decoded) => {
+      if (!err) {
+        let room = new Room({name: data.room, owner: data.user.name});
+        Room.findOne({name: data.room}, (err, res) => {
+          if (!err && !res) {
+            room.save(err => {
+              if (!err) {
+                socket.emit('create', {type: 'success', room: data.room});
+              }
+              else {
+                socket.emit('create', {type: 'failed', err});
+              }
+            })
+          }
+          else if (!err && res) {
+            socket.emit('create', {type: 'roomExists'});
+          }
+          else {
+            socket.emit('create', {type: 'failed', err});
+          }
+        })
+      }
+      else {
+        socket.emit('create', {type: 'failed', err});
+      }
+    });
+  })
+
   //Message event
   socket.on('message', data => {
     socket.to(data.room).emit('message', {message: data.message, username: data.username});
   });
 });
-
-function listRooms() {
-  let socketRooms = Object.keys(io.sockets.adapter.rooms);
-
-  //Remove clients from the list of rooms
-  clients.forEach(client => {
-    socketRooms.splice(socketRooms.indexOf(client), 1);
-  });
-
-  return socketRooms;
-}
 
 function defaultPrompt() {
   sl.prompt('', res => {

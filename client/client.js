@@ -129,6 +129,26 @@ socket.on('join', data => {
   }
 });
 
+//On create
+socket.on('create', data => {
+  if (data.type === 'success') {
+    sl.log(`Room successfully created: ${data.room}`);
+    home();
+  }
+  else if (data.type === 'roomExists') {
+    sl.log(`Room already exists`);
+    home();
+  }
+  else if (data.type === 'failed') {
+    sl.log('Error: ' + data.err);
+    home();
+  }
+  else {
+    sl.log('Error: Unknown');
+    home();
+  }
+})
+
 //On message
 socket.on('message', data => {
   sl.log(`${data.username}: ${data.message}`);
@@ -213,6 +233,10 @@ function home() {
     else if (res.startsWith('/join ')) {
       let room = res.slice(6);
       socket.emit('join', {room, user});
+    }
+    else if (res.startsWith('/create ')) {
+      let room = res.slice(8);
+      socket.emit('create', {room, user});
     }
     else {
       sl.log('Command not found')
