@@ -8,13 +8,7 @@ const socket = io.connect('https://localhost:4000', {
   rejectUnauthorized: false
   //REMOVE THIS IN PRODUCTION!!!
 });
-// let connected = false;
-// let jwtToken;
-// let privateKey;
-// let pubKey;
-// let name;
-// let user = {};
-// let userList;
+sl.defaultPrompt('');
 
 let session = {
   connected: false,
@@ -36,8 +30,6 @@ socket.on('connect', () => {
 socket.on('login', data => {
   if (data.type === 'success') {
     session.token = data.token;
-    sl.log(socket.id);
-    sl.log(session.token);
     sl.log('Login successful');
     home();
   }
@@ -115,16 +107,14 @@ socket.on('ls', data => {
 socket.on('join', data => {
   if (data.type === 'success') {
     sl.log(`Room successfully joined: ${data.room}`);
-    userList = data.users;
-    sl.log(userList);
-    room(data.room);
+    room();
   }
   else if (data.type === 'notFound') {
     sl.log('Room not found');
     home();
   }
   else if (data.type === 'failed') {
-    sl.log('Error: ' + data.err);
+    sl.log('Error: ' + data.err.message);
     home();
   }
   else {
@@ -154,8 +144,8 @@ socket.on('create', data => {
 })
 
 //On message
-socket.on('message', data => {
-  sl.log(`${data.username}: ${data.message}`);
+socket.on('msg', data => {
+  sl.log(`${data.name}: ${data.msg}`);
 });
 
 //On invalid token
@@ -253,14 +243,14 @@ function home() {
   });
 };
 
-function room(roomName) {
+function room() {
   sl.prompt('', res => {
     if (res.startsWith('/')) {
 
     }
     else {
-      socket.emit('message', {message: res, room: roomName, name});
-      room(roomName);
+      socket.emit('msg', {msg: res, token: session.token});
+      room();
     }
   })
 };
