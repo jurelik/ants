@@ -9,7 +9,7 @@ const roomSchema = new Schema({
   owner: String,
   ban: Array,
   salt: String,
-  users: {}
+  users: [Object]
 });
 
 const Room = mongoose.model('room', roomSchema);

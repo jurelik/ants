@@ -7,11 +7,22 @@ const fs = require('fs');
 const jwt = require('jsonwebtoken');
 const crypto = require('crypto');
 
-const io = socketio.listen(4000);
-sl.defaultPrompt('');
-
 const privateKey = fs.readFileSync('./private.key', 'utf8');
-const publicKey = fs.readFileSync('./public.key', 'utf8')
+const publicKey = fs.readFileSync('./public.key', 'utf8');
+const certOptions = {
+  key: fs.readFileSync('./tls/localhost.key'),
+  cert: fs.readFileSync('./tls/localhost.crt')
+}
+
+const server = require('https').createServer(certOptions).listen(4000);
+
+const io = socketio(server, {
+  //REMOVE THIS IN PRODUCTION!!!
+  rejectUnauthorized: false
+  //REMOVE THIS IN PRODUCTION!!!
+});
+
+
 const clients = [];
 
 function serverInit() {
@@ -51,16 +62,16 @@ io.on('connection', socket => {
     User.findOne({name: data.name}, (err, user) => {
       if (!err && user) { //If user exists
         if (user.pw === data.pw) { //If password is correct
-          User.updateOne({name: data.name}, {id: socket.id, pubKey: data.pubKey}, (err, raw) => { //Update id to current session socket.id
-            if (!err) {
-              //Create jwtToken
-              jwt.sign({name: data.name, id: socket.id}, privateKey, {algorithm: 'RS256', expiresIn: '1d'}, (err, token) => {
+          user.id = socket.id;
+
+          user.save(err => {
+            if(!err) {
+              jwt.sign({name: data.name}, privateKey, {algorithm: 'RS256', expiresIn: '1d', jwtid: socket.id}, (err, token) => {
                 if (!err) {
-                  socket.emit('login', {type: 'loginSuccessful', name: data.name, token: token});
+                  socket.emit('login', {type: 'success', token});
                 }
                 else {
                   socket.emit('login', {type: 'error', error: err});
-                  sl.log(err);
                 }
               });
             }
@@ -70,11 +81,11 @@ io.on('connection', socket => {
           });
         }
         else {
-          socket.emit('login', {type: 'loginFailed'});
+          socket.emit('login', {type: 'failed'});
         }
       }
       else if (!err && !user) {
-        socket.emit('login', {type: 'loginFailed'});
+        socket.emit('login', {type: 'failed'});
       }
       else {
         socket.emit('login', {type: 'error', error: err});
@@ -84,7 +95,7 @@ io.on('connection', socket => {
 
   //Register event
   socket.on('register', data => {
-    let user = new User({name: data.name, pw: data.pw, salt: data.salt, id: socket.id, pubKey: {}});
+    let user = new User({name: data.name, pw: data.pw, salt: data.salt, id: socket.id});
     User.findOne({name: user.name}, (err, docs) => { //Check if user exists already
       if (!docs && !err) {
         user.save(err => {
@@ -112,6 +123,7 @@ io.on('connection', socket => {
         socket.emit('getSalt', {type: 'success', name: data.name, salt: res.salt});
       }
       else if (!err && !res) {
+        //Fake a salt to prevent an attacker from realizing a user doesn't exist
         let salt = crypto.randomBytes(128).toString('base64');
         socket.emit('getSalt', {type: 'success', name: data.name, salt})
       }
@@ -123,89 +135,162 @@ io.on('connection', socket => {
 
   //List event
   socket.on('ls', data => {
-    jwt.verify(data.user.token, publicKey, (err, decoded) => {
-      if (!err) {
-        Room.find({}, (err, res) => {
-          if (!err) {
-            let roomList = [];
-            res.forEach(room => {
-              roomList.push(room.name);
-            });
-            socket.emit('ls', {type: 'success', rooms: roomList});
-          }
-          else {
-            socket.emit('ls', {type: 'failed', err});
-          }
-        });
+    jwt.verify(data.token, publicKey, {jwtid: socket.id}, (err, decoded) => {
+      if(!err) {
+        if (!err) {
+          socket.emit('ls', {type: 'success'});
+        }
+        else {
+          socket.emit('ls', {type: 'failed', err});
+        }
       }
       else {
-        sl.log(err);
-        socket.emit('ls', {type: 'failed', err});
+        socket.emit('tokenNotValid', {err});
       }
+      // if (!err) {
+      //   Room.find({}, (err, res) => {
+      //     if (!err) {
+      //       let roomList = [];
+      //       res.forEach(room => {
+      //         roomList.push(room.name);
+      //       });
+      //       socket.emit('ls', {type: 'success', rooms: roomList});
+      //     }
+      //     else {
+      //       socket.emit('ls', {type: 'failed', err});
+      //     }
+      //   });
+      // }
+      // else {
+      //   sl.log(err);
+      //   socket.emit('ls', {type: 'failed', err});
+      // }
     });
   });
 
   //Join room event
   socket.on('join', data => {
-    jwt.verify(data.user.token, publicKey, (err, decoded) => {
-      if (!err) {
-        Room.findOne({name: data.room}, (err, res) => {
-          res.users = {default: 'default'};
-          res.users[data.user.name] = data.user;
-          res.save(() => {
-            
-          });
-        });
-        // socket.join(data.room, (err) => {
-        //   if (!err) {
-        //     socket.emit('join', {type: 'success', room: data.room});
-        //   }
-        //   else {
-        //     sl.log(err);
-        //     socket.emit('join', {type: 'failed', err});
-        //   }
-        // });
+  //   jwt.verify(data.user.token, publicKey, (err, decoded) => {
+  //     if (!err) {
+  //       Room.findOne({name: data.room}, (err, resRoom) => { //Find the room
+  //         if (!err && res) {
+  //           //Modify the room document to included the joined user
+  //           resRoom.users.push({name: data.user.name, id: data.user.id, pubKey: data.pubKey});
+  //           resRoom.save(err => {
+  //             if (!err) {
+  //               //Modify the user document to include the joined room
+  //               User.findOne({name: data.user.name}, (err, resUser) => {
+  //                 if (!err && res) {
+  //                   resUser.room = data.room;
+  //                   resUser.save(err => {
+  //                     if (!err) {
+  //                       socket.emit('join', {type: 'success', room: data.room, users: resRoom.users});
+  //                     }
+  //                     else {
+  //                       socket.emit('join', {type: 'failed', err});
+  //                     }
+  //                   })
+  //                 }
+  //                 else {
+  //                   socket.emit('join', {type: 'failed', err});
+  //                 }
+  //               });
+  //             }
+  //             else {
+  //               socket.emit('join', {type: 'failed', err});
+  //             }
+  //           });
+  //         }
+  //         else if (!err && !res) {
+  //           socket.emit('join', {type: 'notFound'})
+  //         }
+  //         else {
+  //           socket.emit('join', {type: 'failed', err});
+  //         }
+  //       });
+  //     }
+  //     else {
+  //       sl.log(err);
+  //       socket.emit('join', {type: 'failed', err});
+  //     }
+  //   });
+  });
+
+  // //Create room event
+  socket.on('create', data => {
+    jwt.verify(data.token, publicKey, (err, decoded) => {
+      if (decoded.id === socket.id) {
+        if (!err) {
+          let room = new Room({name: data.room, owner: decoded.name});
+          Room.findOne({name: data.room}, (err, res) => {
+            if (!err && !res) { //If room doesn't exist yet
+              room.save(err => {
+                if (!err) {
+                  socket.emit('create', {type: 'success', room: data.room});
+                }
+                else {
+                  socket.emit('create', {type: 'failed', err});
+                }
+              })
+            }
+            else if (!err && res) { //If room already exists
+              socket.emit('create', {type: 'roomExists'});
+            }
+            else {
+              socket.emit('create', {type: 'failed', err});
+            }
+          })
+        }
+        else {
+          socket.emit('create', {type: 'failed', err});
+        }
       }
       else {
-        sl.log(err);
-        socket.emit('join', {type: 'failed', err});
+        socket.emit('tokenNotValid', {});
       }
     });
   });
 
-  //Create room event
-  socket.on('create', data => {
-    jwt.verify(data.user.token, publicKey, (err, decoded) => {
-      if (!err) {
-        let room = new Room({name: data.room, owner: data.user.name});
-        Room.findOne({name: data.room}, (err, res) => {
-          if (!err && !res) {
-            room.save(err => {
-              if (!err) {
-                socket.emit('create', {type: 'success', room: data.room});
-              }
-              else {
-                socket.emit('create', {type: 'failed', err});
-              }
-            })
-          }
-          else if (!err && res) {
-            socket.emit('create', {type: 'roomExists'});
-          }
-          else {
-            socket.emit('create', {type: 'failed', err});
-          }
-        })
-      }
-      else {
-        socket.emit('create', {type: 'failed', err});
-      }
-    });
-  })
-
   //Message event
   socket.on('message', data => {
     socket.to(data.room).emit('message', {message: data.message, username: data.username});
+  });
+
+  //Disconnect event
+  socket.on('disconnect', () => {
+//     User.findOne({id: socket.id}, (err, resUser) => { //get the disconnected user
+//       if (resUser.room) {
+//         //find the room that the user is connected to and remove him from the users array  
+//         Room.findOne({name: resUser.room}, (err, resRoom) => {
+//           resRoom.users.forEach(user => {
+//             if (user.name === resUser.name) {
+//               resRoom.users.splice(resRoom.users.indexOf(user), 1);
+//             }
+//           });
+//           resRoom.save(err => {
+//             if (!err) {
+//               resUser.room = null;
+//               resUser.save(err => {
+//                 if (!err) {
+//                   //MAKE SURE TO DELETE THIS IN PRODUCTION!!!
+//                   sl.log(`${resUser.name} disconnected [${resRoom.name}]`);
+//                 }
+//                 else {
+//                   sl.log(`Error disconnecting user: ${resUser.name}`);
+//                 }
+//               });
+//             }
+//             else {
+//               sl.log(`Error disconnecting user: ${resUser.name}`);
+//             }
+//           });
+//         });
+//       }
+//       else {
+//         //MAKE SURE TO DELETE THIS IN PRODUCTION!!!
+//         sl.log(`${resUser.name} disconnected [no room]`);
+//       }
+//     });
   });
 });
 

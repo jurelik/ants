@@ -2,13 +2,23 @@ const sl = require('staylow');
 const io = require('socket.io-client');
 const crypto = require('crypto');
 
-const socket = io.connect('http://localhost:4000', {reconnectionAttempts: 3});
-sl.defaultPrompt('');
-let connected = false;
-let jwtToken;
-let privateKey;
-let name;
-let user = {};
+const socket = io.connect('https://localhost:4000', {
+  reconnectionAttempts: 3,
+  //REMOVE THIS IN PRODUCTION!!!
+  rejectUnauthorized: false
+  //REMOVE THIS IN PRODUCTION!!!
+});
+// let connected = false;
+// let jwtToken;
+// let privateKey;
+// let pubKey;
+// let name;
+// let user = {};
+// let userList;
+
+let session = {
+  connected: false,
+};
 
 //
 //SOCKET EVENTS
@@ -24,14 +34,14 @@ socket.on('connect', () => {
 
 //On login
 socket.on('login', data => {
-  if (data.type === 'loginSuccessful') {
-    user.token = data.token;
-    user.name = data.name;
-    user.id = socket.id;
+  if (data.type === 'success') {
+    session.token = data.token;
+    sl.log(socket.id);
+    sl.log(session.token);
     sl.log('Login successful');
     home();
   }
-  else if (data.type === 'loginFailed') {
+  else if (data.type === 'failed') {
     sl.log('Username or password incorrect.');
     login();
   }
@@ -67,19 +77,7 @@ socket.on('getSalt', data => {
       //Hash password before sending to server
       crypto.pbkdf2(res, data.salt, 100000, 128, 'sha512', (err, derivedKey) => {
         if (!err) {
-          //Generate RSA key pair
-          crypto.generateKeyPair('rsa', {
-            modulusLength: 2048
-          }, (err, publicKey, privateKey) => {
-            if (!err) {
-              privateKey = privateKey;
-              socket.emit('login', {name: data.name, pw: derivedKey.toString('base64'), pubKey: publicKey})
-            }
-            else {
-              sl.log(err);
-              login();
-            }
-          });
+          socket.emit('login', {name: data.name, pw: derivedKey.toString('base64')});
         }
         else {
           sl.log('Error: ' + err);
@@ -117,7 +115,13 @@ socket.on('ls', data => {
 socket.on('join', data => {
   if (data.type === 'success') {
     sl.log(`Room successfully joined: ${data.room}`);
+    userList = data.users;
+    sl.log(userList);
     room(data.room);
+  }
+  else if (data.type === 'notFound') {
+    sl.log('Room not found');
+    home();
   }
   else if (data.type === 'failed') {
     sl.log('Error: ' + data.err);
@@ -154,6 +158,12 @@ socket.on('message', data => {
   sl.log(`${data.username}: ${data.message}`);
 });
 
+//On invalid token
+socket.on('tokenNotValid', data => {
+  sl.log(data.err.message);
+  login();
+});
+
 //Function declarations
 function chat() {
   sl.prompt('').then(res => {
@@ -163,9 +173,8 @@ function chat() {
 };
 
 function login() {
-  if (connected === false) {
+  if (session.connected === false) {
     clear();
-    sl.log(``);
     sl.log(`
   
 
@@ -186,7 +195,7 @@ _,-'     \\_/_|_  |\\   |\`. /   \`._,--===--.__
                  
                  `)
     sl.log('Welcome to ants. To create a new account please enter /n');
-    connected = true;
+    session.connected = true;
   }
   sl.prompt('Enter username: ', res => {
     if (res.startsWith('/')) {
@@ -199,8 +208,7 @@ _,-'     \\_/_|_  |\\   |\`. /   \`._,--===--.__
       }
     }
     else {
-      let username = res;
-      socket.emit('getSalt', {name: username});
+      socket.emit('getSalt', {name: res});
     }
   });
 };
@@ -228,15 +236,15 @@ function register() {
 function home() {
   sl.prompt('', false, res => {
     if (res === 'ls') {
-      socket.emit('ls', {user});
+      socket.emit('ls', {token: session.token});
     }
     else if (res.startsWith('/join ')) {
       let room = res.slice(6);
-      socket.emit('join', {room, user});
+      socket.emit('join', {room, token: session.token});
     }
     else if (res.startsWith('/create ')) {
       let room = res.slice(8);
-      socket.emit('create', {room, user});
+      socket.emit('create', {room, token: session.token});
     }
     else {
       sl.log('Command not found')

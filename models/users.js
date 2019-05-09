@@ -7,7 +7,8 @@ const UserSchema = new Schema({
   pw: String,
   id: String,
   salt: String,
-  pubKey: {}
+  pubKey: {},
+  room: String
 });
 
 const User = mongoose.model('user', UserSchema);
