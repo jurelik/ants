@@ -8,7 +8,12 @@ const socket = io.connect('https://localhost:4000', {
   rejectUnauthorized: false
   //REMOVE THIS IN PRODUCTION!!!
 });
-sl.defaultPrompt('');
+
+sl.options({
+  defaultPrompt: '',
+  globalMask: '*',
+  logOnEnter: 'false'
+});
 
 let session = {
   connected: false,
@@ -246,10 +251,17 @@ function home() {
 function room() {
   sl.prompt('', res => {
     if (res.startsWith('/')) {
-
+      if (res.slice(1, 2) === 'p') {
+        let array = res.split(' ');
+        let user = array[1];
+        let msg = array.slice(2).join(' ');
+        sl.addToHistory(`/p ${user} `);
+        // socket.emit('msg', {msg, type: 'private', token: session.token});
+        room();
+      }
     }
     else {
-      socket.emit('msg', {msg: res, token: session.token});
+      socket.emit('msg', {msg: res, type: 'public', token: session.token});
       room();
     }
   })

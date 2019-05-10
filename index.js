@@ -6,7 +6,10 @@ const Room = require('./models/rooms');
 const fs = require('fs');
 const jwt = require('jsonwebtoken');
 const crypto = require('crypto');
-sl.defaultPrompt('');
+
+sl.options({
+  defaultPrompt: ''
+})
 
 const privateKey = fs.readFileSync('./private.key', 'utf8');
 const publicKey = fs.readFileSync('./public.key', 'utf8');
@@ -181,7 +184,7 @@ io.on('connection', socket => {
     });
   });
 
-  // //Create room event
+  //Create room event
   socket.on('create', data => {
     jwt.verify(data.token, publicKey, {jwtid: socket.id}, (err, decoded) => {
       if (!err) {
