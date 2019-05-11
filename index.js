@@ -61,6 +61,7 @@ io.on('connection', socket => {
       if (!err && user) { //If user exists
         if (user.pw === data.pw) { //If password is correct
           user.id = socket.id;
+          user.online = true;
           user.save(err => {
             if(!err) {
               jwt.sign({name: data.name}, privateKey, {algorithm: 'RS256', expiresIn: '1d', jwtid: socket.id}, (err, token) => {
@@ -218,7 +219,29 @@ io.on('connection', socket => {
   socket.on('msg', data => {
     jwt.verify(data.token, publicKey, {jwtid: socket.id}, (err, decoded) => {
       if (!err) {
-        socket.to(socket.activeRoom).emit('msg', {msg: data.msg, name: decoded.name});
+        if (data.type === 'public') {
+          socket.emit('msg', {msg: data.msg, type: 'success'});
+          socket.to(socket.activeRoom).emit('msg', {msg: data.msg, name: decoded.name, type: 'public'});
+        }
+        else if (data.type === 'private') {
+          User.findOne({name: data.msgTo}, (err, res) => {
+            if (!err && res) {
+              if (res.online) {
+                socket.emit('msg', {msg: `PRIVATE to ${data.msgTo}: ${data.msg}`, type: 'success'});
+                socket.to(res.id).emit('msg', {msg: data.msg, name: decoded.name, type: 'private'});  
+              }
+              else {
+                socket.emit('msg', {type: 'userNotOnline', msgTo: data.msgTo});
+              }
+            }
+            else if (!err && !res) {
+              socket.emit('msg', {type: 'userNotFound', msgTo: data.msgTo});
+            }
+            else {
+              socket.emit('msg', {type: 'error', err});
+            }
+          });
+        }
       }
       else {
         socket.emit('tokenNotValid', {});
@@ -228,6 +251,11 @@ io.on('connection', socket => {
 
   //Disconnect event
   socket.on('disconnect', () => {
+    User.updateOne({id: socket.id}, {online: false}, (err, raw) => {
+      if (err) {
+        sl.log(`Error loging out user: ${err}`);
+      }
+    });
 //     User.findOne({id: socket.id}, (err, resUser) => { //get the disconnected user
 //       if (resUser.room) {
 //         //find the room that the user is connected to and remove him from the users array  

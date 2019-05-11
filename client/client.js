@@ -150,7 +150,27 @@ socket.on('create', data => {
 
 //On message
 socket.on('msg', data => {
-  sl.log(`${data.name}: ${data.msg}`);
+  if (data.type === 'success') {
+    sl.log(data.msg);
+  }
+  else if (data.type === 'public') {
+    sl.log(`${data.name}: ${data.msg}`);
+  }
+  else if (data.type === 'private') {
+    sl.log(`PRIVATE from ${data.name}: ${data.msg}`);
+  }
+  else if (data.type === 'userNotFound') {
+    sl.log(`User '${data.msgTo}' not found.`);
+  }
+  else if (data.type === 'userNotOnline') {
+    sl.log(`User '${data.msgTo}' is not online.`);
+  }
+  else if (data.type === 'error') {
+    sl.log('Error: ' + err);
+  }
+  else {
+    sl.log('Error: Unknown');
+  }
 });
 
 //On invalid token
@@ -256,7 +276,7 @@ function room() {
         let user = array[1];
         let msg = array.slice(2).join(' ');
         sl.addToHistory(`/p ${user} `);
-        // socket.emit('msg', {msg, type: 'private', token: session.token});
+        socket.emit('msg', {msg, type: 'private', token: session.token, msgTo: user});
         room();
       }
     }
