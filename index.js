@@ -133,7 +133,7 @@ io.on('connection', socket => {
 
   //List event
   socket.on('ls', data => {
-    jwt.verify(data.token, publicKey, {jwtid: socket.id}, (err, decoded) => {
+    verifyToken(data, socket.id, (err, decoded) => {
       if(!err) {
         Room.find({}, (err, res) => {
           if (!err) {
@@ -156,7 +156,7 @@ io.on('connection', socket => {
 
   //Join room event
   socket.on('join', data => {
-    jwt.verify(data.token, publicKey, {jwtid: socket.id}, (err, decoded) => {
+    verifyToken(data, socket.id, (err, decoded) => {
       if (!err) {
         Room.findOne({name: data.room}, (err, res) => { //Find the room
           if (!err && res) {
@@ -187,7 +187,7 @@ io.on('connection', socket => {
 
   //Create room event
   socket.on('create', data => {
-    jwt.verify(data.token, publicKey, {jwtid: socket.id}, (err, decoded) => {
+    verifyToken(data, socket.id, (err, decoded) => {
       if (!err) {
         let room = new Room({name: data.room, owner: decoded.name});
         Room.findOne({name: data.room}, (err, res) => {
@@ -217,18 +217,18 @@ io.on('connection', socket => {
 
   //Message event
   socket.on('msg', data => {
-    jwt.verify(data.token, publicKey, {jwtid: socket.id}, (err, decoded) => {
+    verifyToken(data, socket.id, (err, decoded) => {
       if (!err) {
         if (data.type === 'public') {
-          socket.emit('msg', {msg: data.msg, type: 'success'});
-          socket.to(socket.activeRoom).emit('msg', {msg: data.msg, name: decoded.name, type: 'public'});
+          socket.emit('msg', {msg: data.msg, roomOrUser: socket.activeRoom, type: 'success'});
+          socket.to(socket.activeRoom).emit('msg', {msg: data.msg, name: decoded.name, roomOrUser: socket.activeRoom, type: 'public'});
         }
         else if (data.type === 'private') {
           User.findOne({name: data.msgTo}, (err, res) => {
             if (!err && res) {
               if (res.online) {
-                socket.emit('msg', {msg: `PRIVATE to ${data.msgTo}: ${data.msg}`, type: 'success'});
-                socket.to(res.id).emit('msg', {msg: data.msg, name: decoded.name, type: 'private'});  
+                socket.emit('msg', {msg: `PRIVATE to ${data.msgTo}: ${data.msg}`, roomOrUser: data.msgTo, type: 'success'});
+                socket.to(res.id).emit('msg', {msg: data.msg, name: decoded.name, roomOrUser: data.msgTo, type: 'private'});  
               }
               else {
                 socket.emit('msg', {type: 'userNotOnline', msgTo: data.msgTo});
@@ -253,53 +253,15 @@ io.on('connection', socket => {
   socket.on('disconnect', () => {
     User.updateOne({id: socket.id}, {online: false}, (err, raw) => {
       if (err) {
-        sl.log(`Error loging out user: ${err}`);
+       sl.log(`Error loging out user: ${err}`);
       }
-    });
-//     User.findOne({id: socket.id}, (err, resUser) => { //get the disconnected user
-//       if (resUser.room) {
-//         //find the room that the user is connected to and remove him from the users array  
-//         Room.findOne({name: resUser.room}, (err, resRoom) => {
-//           resRoom.users.forEach(user => {
-//             if (user.name === resUser.name) {
-//               resRoom.users.splice(resRoom.users.indexOf(user), 1);
-//             }
-//           });
-//           resRoom.save(err => {
-//             if (!err) {
-//               resUser.room = null;
-//               resUser.save(err => {
-//                 if (!err) {
-//                   //MAKE SURE TO DELETE THIS IN PRODUCTION!!!
-//                   sl.log(`${resUser.name} disconnected [${resRoom.name}]`);
-//                 }
-//                 else {
-//                   sl.log(`Error disconnecting user: ${resUser.name}`);
-//                 }
-//               });
-//             }
-//             else {
-//               sl.log(`Error disconnecting user: ${resUser.name}`);
-//             }
-//           });
-//         });
-//       }
-//       else {
-//         //MAKE SURE TO DELETE THIS IN PRODUCTION!!!
-//         sl.log(`${resUser.name} disconnected [no room]`);
-//       }
-//     });
+    }); 
   });
 });
 
-function listRooms() {
-  let roomList = [];
-  rooms = Room.find({}, (err, res) => {
-    res.forEach(room => {
-      roomList.push(room.name);
-    });
-    sl.log(roomList);
-    return roomList;
+function verifyToken(data, id, callback) {
+  jwt.verify(data.token, publicKey, {jwtid: id, algorithms: 'RS256'}, (err, decoded) => {
+    callback(err, decoded);
   });
 }
 

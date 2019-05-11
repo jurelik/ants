@@ -17,6 +17,7 @@ sl.options({
 
 let session = {
   connected: false,
+  log: {}
 };
 
 //
@@ -152,12 +153,15 @@ socket.on('create', data => {
 socket.on('msg', data => {
   if (data.type === 'success') {
     sl.log(data.msg);
+    addToLog(data.roomOrUser, data.msg);
   }
   else if (data.type === 'public') {
     sl.log(`${data.name}: ${data.msg}`);
+    addToLog(data.roomOrUser, data.msg);
   }
   else if (data.type === 'private') {
     sl.log(`PRIVATE from ${data.name}: ${data.msg}`);
+    addToLog(data.roomOrUser, data.msg);
   }
   else if (data.type === 'userNotFound') {
     sl.log(`User '${data.msgTo}' not found.`);
@@ -213,7 +217,7 @@ _,-'     \\_/_|_  |\\   |\`. /   \`._,--===--.__
     session.connected = true;
   }
   sl.prompt('Enter username: ', res => {
-    if (res.startsWith('/')) {
+    if (res.startsWith(':')) {
       if(res.slice(1) === 'n') {
         register();
       }
@@ -250,16 +254,24 @@ function register() {
 
 function home() {
   sl.prompt('', false, res => {
-    if (res === 'ls') {
+    if (res === ':ls') {
       socket.emit('ls', {token: session.token});
     }
-    else if (res.startsWith('/join ')) {
+    else if (res.startsWith(':join ')) {
       let room = res.slice(6);
       socket.emit('join', {room, token: session.token});
     }
-    else if (res.startsWith('/create ')) {
+    else if (res.startsWith(':create ')) {
       let room = res.slice(8);
       socket.emit('create', {room, token: session.token});
+    }
+    else if (res.startsWith(':p ')) {
+      let array = res.split(' ');
+      let user = array[1];
+      let msg = array.slice(2).join(' ');
+      sl.addToHistory(`:p ${user} `);
+      socket.emit('msg', {msg, type: 'private', token: session.token, msgTo: user});
+      home();
     }
     else {
       sl.log('Command not found')
@@ -270,15 +282,18 @@ function home() {
 
 function room() {
   sl.prompt('', res => {
-    if (res.startsWith('/')) {
-      if (res.slice(1, 2) === 'p') {
-        let array = res.split(' ');
-        let user = array[1];
-        let msg = array.slice(2).join(' ');
-        sl.addToHistory(`/p ${user} `);
-        socket.emit('msg', {msg, type: 'private', token: session.token, msgTo: user});
-        room();
-      }
+    if (res.startsWith(':p')) {
+      let array = res.split(' ');
+      let user = array[1];
+      let msg = array.slice(2).join(' ');
+      sl.addToHistory(`:p ${user} `);
+      socket.emit('msg', {msg, type: 'private', token: session.token, msgTo: user});
+      room();
+    }
+    else if (res.startsWith(':switch')) {
+      let array = res.split(' ');
+      let roomOrUser = array[1];
+      switchScreen(roomOrUser);
     }
     else {
       socket.emit('msg', {msg: res, type: 'public', token: session.token});
@@ -287,6 +302,29 @@ function room() {
   })
 };
 
+function addToLog(roomOrUser, msg) {
+  if (session.log[roomOrUser]) {
+    session.log[roomOrUser].push(msg);
+  }
+  else {
+    session.log[roomOrUser] = [];
+    session.log[roomOrUser].push(msg);
+  }
+}
+
+function switchScreen(roomOrUser) {
+  if(session.log[roomOrUser]) {
+    clear();
+    session.log[roomOrUser].forEach(msg => {
+      sl.log(msg);
+    });
+  }
+  else {
+
+  }
+}
+
 function clear() {
   process.stdout.write('\x1b[2J');
 }
+
