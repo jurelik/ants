@@ -8,8 +8,8 @@ const jwt = require('jsonwebtoken');
 const crypto = require('crypto');
 
 sl.options({
-  defaultPrompt: ''
-})
+  defaultPrompt: '',
+});
 
 const privateKey = fs.readFileSync('./private.key', 'utf8');
 const publicKey = fs.readFileSync('./public.key', 'utf8');
@@ -220,15 +220,15 @@ io.on('connection', socket => {
     verifyToken(data, socket.id, (err, decoded) => {
       if (!err) {
         if (data.type === 'public') {
-          socket.emit('msg', {msg: data.msg, roomOrUser: socket.activeRoom, type: 'success'});
-          socket.to(socket.activeRoom).emit('msg', {msg: data.msg, name: decoded.name, roomOrUser: socket.activeRoom, type: 'public'});
+          socket.emit('msg', {msg: data.msg, room: socket.activeRoom, type: 'success'});
+          socket.to(socket.activeRoom).emit('msg', {msg: data.msg, name: decoded.name, room: socket.activeRoom, type: 'public'});
         }
         else if (data.type === 'private') {
           User.findOne({name: data.msgTo}, (err, res) => {
             if (!err && res) {
               if (res.online) {
-                socket.emit('msg', {msg: `PRIVATE to ${data.msgTo}: ${data.msg}`, roomOrUser: data.msgTo, type: 'success'});
-                socket.to(res.id).emit('msg', {msg: data.msg, name: decoded.name, roomOrUser: data.msgTo, type: 'private'});  
+                socket.emit('msg', {msg: `PRIVATE to ${data.msgTo}: ${data.msg}`, room: data.msgTo, type: 'success'});
+                socket.to(res.id).emit('msg', {msg: data.msg, name: decoded.name, room: data.msgTo, type: 'private'});  
               }
               else {
                 socket.emit('msg', {type: 'userNotOnline', msgTo: data.msgTo});
@@ -247,6 +247,41 @@ io.on('connection', socket => {
         socket.emit('tokenNotValid', {});
       }
     });
+  });
+
+  socket.on('switch', data => {
+    verifyToken(data, socket.id, (err, decoded) => {
+      if(!err) {
+        let found = false;
+        Object.keys(socket.rooms).forEach(res => {
+          if (res === data.room) {
+            socket.emit('switch', {type: 'success', room: data.room, roomOrUser: 'room'});
+            socket.activeRoom = data.room;
+            found = true;
+          }
+        });
+        if (!found) {
+          User.findOne({name: data.room}, (err, res) => {
+            if (!err && res) {
+              socket.emit('switch', {type: 'success', room: res.id, roomOrUser: 'user'});
+              socket.activeRoom = res.id;
+              sl.log(socket.activeRoom);
+            }
+            else if (!err && !res) {
+              socket.emit('switch', {type: 'failed', room: data.room});
+            }
+            else {
+              socket.emit('switch', {type: 'error', err});
+            }
+          })
+          socket.emit('switch', {type: 'failed', room: data.room});
+        }
+      }
+      else {
+        socket.emit('tokenNotValid', {});
+      }
+    });
+    
   });
 
   //Disconnect event

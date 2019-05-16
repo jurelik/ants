@@ -17,7 +17,8 @@ sl.options({
 
 let session = {
   connected: false,
-  log: {}
+  log: {},
+  activeRoom: ''
 };
 
 //
@@ -113,6 +114,7 @@ socket.on('ls', data => {
 socket.on('join', data => {
   if (data.type === 'success') {
     sl.log(`Room successfully joined: ${data.room}`);
+    session.activeRoom = data.room;
     room();
   }
   else if (data.type === 'notFound') {
@@ -153,15 +155,20 @@ socket.on('create', data => {
 socket.on('msg', data => {
   if (data.type === 'success') {
     sl.log(data.msg);
-    addToLog(data.roomOrUser, data.msg);
+    addToLog(data.room, data.msg);
   }
   else if (data.type === 'public') {
-    sl.log(`${data.name}: ${data.msg}`);
-    addToLog(data.roomOrUser, data.msg);
+    if (data.room === session.activeRoom) {
+      sl.log(`${data.name}: ${data.msg}`);
+      addToLog(data.room, `${data.name}: ${data.msg}`);
+    }
+    else {
+      addToLog(data.room, `${data.name}: ${data.msg}`);
+    }
   }
   else if (data.type === 'private') {
     sl.log(`PRIVATE from ${data.name}: ${data.msg}`);
-    addToLog(data.roomOrUser, data.msg);
+    addToLog(data.room, data.msg);
   }
   else if (data.type === 'userNotFound') {
     sl.log(`User '${data.msgTo}' not found.`);
@@ -174,6 +181,20 @@ socket.on('msg', data => {
   }
   else {
     sl.log('Error: Unknown');
+  }
+});
+
+//On switch
+socket.on('switch', data => {
+  if (data.type === 'success') {
+    if (data.roomOrUser === 'user' && !session.log[data.room]) {
+      session.log[data.room] = [];
+    }
+    drawLog(data.room);
+    session.activeRoom = data.room;
+  }
+  else if (data.type === 'failed') {
+    sl.log('aw');
   }
 });
 
@@ -290,10 +311,15 @@ function room() {
       socket.emit('msg', {msg, type: 'private', token: session.token, msgTo: user});
       room();
     }
-    else if (res.startsWith(':switch')) {
+    else if (res.startsWith(':join ')) {
+      let _room = res.slice(6);
+      socket.emit('join', {room: _room, token: session.token});
+    }
+    else if (res.startsWith(':switch ')) {
       let array = res.split(' ');
-      let roomOrUser = array[1];
-      switchScreen(roomOrUser);
+      let _room = array[1];
+      socket.emit('switch', {room: _room, token: session.token});
+      room();
     }
     else {
       socket.emit('msg', {msg: res, type: 'public', token: session.token});
@@ -302,26 +328,21 @@ function room() {
   })
 };
 
-function addToLog(roomOrUser, msg) {
-  if (session.log[roomOrUser]) {
-    session.log[roomOrUser].push(msg);
+function addToLog(room, msg) {
+  if (session.log[room]) {
+    session.log[room].push(msg);
   }
   else {
-    session.log[roomOrUser] = [];
-    session.log[roomOrUser].push(msg);
+    session.log[room] = [];
+    session.log[room].push(msg);
   }
 }
 
-function switchScreen(roomOrUser) {
-  if(session.log[roomOrUser]) {
-    clear();
-    session.log[roomOrUser].forEach(msg => {
-      sl.log(msg);
-    });
-  }
-  else {
-
-  }
+function drawLog(room) {
+  clear();
+  session.log[room].forEach(msg => {
+    sl.log(msg);
+  });
 }
 
 function clear() {
