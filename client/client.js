@@ -2,24 +2,23 @@ const sl = require('staylow');
 const io = require('socket.io-client');
 const crypto = require('crypto');
 
-const socket = io.connect('https://localhost:4000', {
-  reconnectionAttempts: 3,
-  //REMOVE THIS IN PRODUCTION!!!
-  rejectUnauthorized: false
-  //REMOVE THIS IN PRODUCTION!!!
-});
-
+const socket = io.connect('http://localhost:4000', {reconnectionAttempts: 3});
 sl.options({
   defaultPrompt: '',
   globalMask: '*',
   logOnEnter: 'false'
 });
-
 let session = {
+  activeRooom: '',
   connected: false,
   log: {},
-  activeRoom: ''
-};
+  user: {}
+}
+let jwtToken;
+let privateKey;
+let name;
+let user = {};
+let rooms = {};
 
 //
 //SOCKET EVENTS
@@ -35,12 +34,14 @@ socket.on('connect', () => {
 
 //On login
 socket.on('login', data => {
-  if (data.type === 'success') {
+  if (data.type === 'loginSuccessful') {
     session.token = data.token;
+    session.user.name = data.name;
+    session.user.id = socket.id;
     sl.log('Login successful');
     home();
   }
-  else if (data.type === 'failed') {
+  else if (data.type === 'loginFailed') {
     sl.log('Username or password incorrect.');
     login();
   }
@@ -76,7 +77,28 @@ socket.on('getSalt', data => {
       //Hash password before sending to server
       crypto.pbkdf2(res, data.salt, 100000, 128, 'sha512', (err, derivedKey) => {
         if (!err) {
-          socket.emit('login', {name: data.name, pw: derivedKey.toString('base64')});
+          //Generate RSA key pair
+          crypto.generateKeyPair('rsa', {
+            modulusLength: 2048,
+            publicKeyEncoding: {
+              type: 'spki',
+              format: 'pem'
+            },
+            privateKeyEncoding: {
+              type: 'pkcs8',
+              format: 'pem'
+            }
+          }, (err, publicKey, privateKey) => {
+            if (!err) {
+              session.privateKey = privateKey;
+              session.user.pubKey = publicKey;
+              socket.emit('login', {name: data.name, pw: derivedKey.toString('base64'), pubKey: publicKey});
+            }
+            else {
+              sl.log(err);
+              login();
+            }
+          });
         }
         else {
           sl.log('Error: ' + err);
@@ -115,19 +137,33 @@ socket.on('join', data => {
   if (data.type === 'success') {
     sl.log(`Room successfully joined: ${data.room}`);
     session.activeRoom = data.room;
+    session.log[data.room] = [];
     room();
+  }
+  else if (data.type === 'alreadyJoined') {
+    sl.log('Room already joined, please use :switch to switch between rooms.');
+    session.home ? home() : room();
+  }
+  else if (data.type === 'failed') {
+    sl.log('Error: ' + data.err);
+    session.home ? home() : room();
   }
   else if (data.type === 'notFound') {
     sl.log('Room not found');
-    home();
+    session.home ? home() : room();
   }
-  else if (data.type === 'failed') {
+  else if (data.type === 'error') {
     sl.log('Error: ' + data.err.message);
-    home();
+    if (session.home) {
+      home();
+    }
+    else {
+      room();
+    }
   }
   else {
     sl.log('Error: Unknown');
-    home();
+    session.home ? home() : room();
   }
 });
 
@@ -135,86 +171,101 @@ socket.on('join', data => {
 socket.on('create', data => {
   if (data.type === 'success') {
     sl.log(`Room successfully created: ${data.room}`);
-    home();
   }
   else if (data.type === 'roomExists') {
     sl.log(`Room already exists`);
-    home();
   }
   else if (data.type === 'failed') {
     sl.log('Error: ' + data.err);
-    home();
   }
   else {
     sl.log('Error: Unknown');
-    home();
   }
 })
-
-//On message
-socket.on('msg', data => {
-  if (data.type === 'success') {
-    sl.log(data.msg);
-    addToLog(data.room, data.msg);
-  }
-  else if (data.type === 'public') {
-    if (data.room === session.activeRoom) {
-      sl.log(`${data.name}: ${data.msg}`);
-      addToLog(data.room, `${data.name}: ${data.msg}`);
-    }
-    else {
-      addToLog(data.room, `${data.name}: ${data.msg}`);
-    }
-  }
-  else if (data.type === 'private') {
-    sl.log(`PRIVATE from ${data.name}: ${data.msg}`);
-    addToLog(data.room, data.msg);
-  }
-  else if (data.type === 'userNotFound') {
-    sl.log(`User '${data.msgTo}' not found.`);
-  }
-  else if (data.type === 'userNotOnline') {
-    sl.log(`User '${data.msgTo}' is not online.`);
-  }
-  else if (data.type === 'error') {
-    sl.log('Error: ' + err);
-  }
-  else {
-    sl.log('Error: Unknown');
-  }
-});
 
 //On switch
 socket.on('switch', data => {
   if (data.type === 'success') {
-    if (data.roomOrUser === 'user' && !session.log[data.room]) {
-      session.log[data.room] = [];
-    }
     drawLog(data.room);
     session.activeRoom = data.room;
   }
   else if (data.type === 'failed') {
-    sl.log('aw');
+    sl.log('Please join a room first before using :switch');
+  }
+  else if (data.type === 'error') {
+    sl.log('Error: ' + data.err);
+  }
+  else {
+    sl.log('Error: Unknown');
   }
 });
 
-//On invalid token
-socket.on('tokenNotValid', data => {
-  sl.log(data.err.message);
-  login();
+//On msgInit
+socket.on('msgInit', data => {
+  if (data.type === 'success' && data.visible === 'public') {
+    data.userList.forEach(user => {
+      const msg = crypto.publicEncrypt(user.pubKey, Buffer.from(session.msg));
+      socket.emit('msg', {msg, dest: user.id, visible: 'public', token: session.token});
+    });
+    session.msg = ''; //Delete message from memory after it is sent
+    session.to = ''; //Delete 'to' value from memory after message is sent
+  }
+  else if (data.type === 'success' && data.visible === 'private') {
+    const self = {
+      id: session.user.id,
+      pubKey: session.user.pubKey
+    };
+    data.userList.push(self);
+    data.userList.forEach(user => {
+      const msg = crypto.publicEncrypt(user.pubKey, Buffer.from(session.msg));
+      socket.emit('msg', {msg, dest: user.id, visible: 'private', to: session.to, token: session.token});
+    });
+    session.msg = ''; //Delete message from memory after it is sent
+    session.to = ''; //Delete 'to' value from memory after message is sent
+  }
+  else {
+    sl.log('Something went wrong');
+  }
+});
+
+//On message
+socket.on('msg', data => {
+  if (data.type === 'success' && data.visible === 'public') {
+    if(session.activeRoom === data.room) {
+      const msg = crypto.privateDecrypt(session.privateKey, data.msg);
+      sl.log(`${data.from}: ${msg.toString()}`);
+      addToLog(data.room, `${data.from}: ${msg.toString()}`);
+    }
+    else {
+      const msg = crypto.privateDecrypt(session.privateKey, data.msg);
+      addToLog(data.room, `${data.from}: ${msg.toString()}`);
+    }
+  }
+  else if (data.type === 'success' && data.visible === 'private') {
+    const msg = crypto.privateDecrypt(session.privateKey, data.msg);
+    if (!data.self) {
+      sl.log(`PRIVATE from ${data.from}: ${msg.toString()}`);
+      addToLog(data.from, `PRIVATE from ${data.from}: ${msg.toString()}`);
+    }
+    else {
+      sl.log(`PRIVATE to ${data.to}: ${msg.toString()}`);
+      addToLog(data.to, `PRIVATE to ${data.to}: ${msg.toString()}`);
+    }
+  }
+  else if (data.type === 'failed') {
+    sl.log('Error: ' + err.message);
+  }
+  else {
+    sl.log('Error: Unknown');
+  }
 });
 
 //Function declarations
-function chat() {
-  sl.prompt('').then(res => {
-    socket.emit('message', {message: res} );
-    chat();
-  });
-};
 
 function login() {
   if (session.connected === false) {
     clear();
+    sl.log(``);
     sl.log(`
   
 
@@ -274,24 +325,28 @@ function register() {
 }
 
 function home() {
+  session.home = true;
   sl.prompt('', false, res => {
     if (res === ':ls') {
       socket.emit('ls', {token: session.token});
     }
     else if (res.startsWith(':join ')) {
       let room = res.slice(6);
-      socket.emit('join', {room, token: session.token});
+      socket.emit('join', {room, user: session.user, token: session.token});
     }
     else if (res.startsWith(':create ')) {
       let room = res.slice(8);
-      socket.emit('create', {room, token: session.token});
+      socket.emit('create', {room, user: session.user, token: session.token});
+      home();
     }
     else if (res.startsWith(':p ')) {
       let array = res.split(' ');
       let user = array[1];
       let msg = array.slice(2).join(' ');
       sl.addToHistory(`:p ${user} `);
-      socket.emit('msg', {msg, type: 'private', token: session.token, msgTo: user});
+      session.msg = msg;
+      session.to = user;
+      socket.emit('msgInit', {dest: user, visible: 'private', token: session.token})
       home();
     }
     else {
@@ -302,27 +357,49 @@ function home() {
 };
 
 function room() {
+  session.home = false;
   sl.prompt('', res => {
-    if (res.startsWith(':p')) {
-      let array = res.split(' ');
-      let user = array[1];
-      let msg = array.slice(2).join(' ');
-      sl.addToHistory(`:p ${user} `);
-      socket.emit('msg', {msg, type: 'private', token: session.token, msgTo: user});
-      room();
-    }
-    else if (res.startsWith(':join ')) {
-      let _room = res.slice(6);
-      socket.emit('join', {room: _room, token: session.token});
-    }
-    else if (res.startsWith(':switch ')) {
-      let array = res.split(' ');
-      let _room = array[1];
-      socket.emit('switch', {room: _room, token: session.token});
-      room();
+    if (res.startsWith(':')) {
+      if (res.startsWith(':join ')) {
+        let room = res.slice(6);
+        socket.emit('join', {room, user: session.user, token: session.token});
+      }
+      else if (res.startsWith(':p ')) {
+        let array = res.split(' ');
+        let user = array[1];
+        let msg = array.slice(2).join(' ');
+        sl.addToHistory(`:p ${user} `);
+        session.msg = msg;
+        session.to = user;
+        socket.emit('msgInit', {dest: user, visible: 'private', token: session.token})
+        room();
+      }
+      else if (res.startsWith(':switch ')) {
+        let _room = res.slice(8);
+        socket.emit('switch', {room: _room, token: session.token});
+        room();
+      }
+      else if (res.startsWith(':log ')) {
+        let user = res.slice(5);
+        if (session.log[user]) {
+          session.log[user].forEach(msg => {
+            sl.log(msg);
+          });
+          room();
+        }
+        else {
+          sl.log('Log not found');
+          room();
+        }
+      }
+      else {
+        sl.log('Command not found');
+        room();
+      }
     }
     else {
-      socket.emit('msg', {msg: res, type: 'public', token: session.token});
+      session.msg = res;
+      socket.emit('msgInit', {visible: 'public', token: session.token});
       room();
     }
   })
@@ -348,4 +425,3 @@ function drawLog(room) {
 function clear() {
   process.stdout.write('\x1b[2J');
 }
-

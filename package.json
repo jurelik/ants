@@ -10,7 +10,7 @@
   "license": "ISC",
   "dependencies": {
     "jsonwebtoken": "^8.5.1",
-    "mongoose": "^5.5.7",
+    "mongoose": "^5.5.9",
     "socket.io": "^2.2.0",
     "socket.io-client": "^2.2.0",
     "staylow": "^1.1.2"
