@@ -116,8 +116,8 @@ socket.on('getSalt', data => {
   }
 });
 
-//On list
-socket.on('ls', data => {
+//On lsRooms
+socket.on('lsRooms', data => {
   if (data.type === 'success') {
     sl.log(data.rooms);
     home();
@@ -129,6 +129,19 @@ socket.on('ls', data => {
   else {
     sl.log('Error: Unknown');
     home();
+  }
+});
+
+//On lsUsers
+socket.on('lsUsers', data => {
+  if (data.type === 'success') {
+    sl.log(data.userList);
+  }
+  else if (data.type === 'failed') {
+    sl.log('Something went wrong');
+  }
+  else {
+    sl.log('Error: Unknown');
   }
 });
 
@@ -260,6 +273,12 @@ socket.on('msg', data => {
   }
 });
 
+//On tokenNotValid
+socket.on('tokenNotValid', () => {
+  sl.log('Token is not valid, please log in again.');
+  login();
+});
+
 //Function declarations
 
 function login() {
@@ -328,7 +347,7 @@ function home() {
   session.home = true;
   sl.prompt('', false, res => {
     if (res === ':ls') {
-      socket.emit('ls', {token: session.token});
+      socket.emit('lsRooms', {token: session.token});
     }
     else if (res.startsWith(':join ')) {
       let room = res.slice(6);
@@ -391,6 +410,10 @@ function room() {
           sl.log('Log not found');
           room();
         }
+      }
+      else if (res === ':ls') {
+        socket.emit('lsUsers', {token: session.token});
+        room();
       }
       else {
         sl.log('Command not found');

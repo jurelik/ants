@@ -123,26 +123,48 @@ io.on('connection', socket => {
     });
   });
 
-  //List event
-  socket.on('ls', data => {
+  //lsRooms event
+  socket.on('lsRooms', data => {
     verifyToken(data, socket.id, (err, decoded) => {
       if (!err) {
         Room.find({}, (err, res) => {
-          if (!err) {
+          if (!err && res) {
             let roomList = [];
             res.forEach(room => {
               roomList.push(room.name);
             });
-            socket.emit('ls', {type: 'success', rooms: roomList});
+            socket.emit('lsRooms', {type: 'success', rooms: roomList});
           }
           else {
-            socket.emit('ls', {type: 'failed', err});
+            socket.emit('lsRooms', {type: 'failed', err});
           }
         });
       }
       else {
-        sl.log(err);
-        socket.emit('ls', {type: 'failed', err});
+        socket.emit('tokenNotValid');
+      }
+    });
+  });
+
+  //lsUsers event
+  socket.on('lsUsers', data => {
+    verifyToken(data, socket.id, (err, decoded) => {
+      if (!err) {
+        Room.findOne({name: socket.activeRoom}, (err, res) => {
+          if (!err && res) {
+            let userList = [];
+            res.users.forEach(user => {
+              userList.push(user.name);
+            });
+            socket.emit('lsUsers', {type: 'success', userList});
+          }
+          else {
+            socket.emit('lsUsers', {type: 'failed', err});
+          }
+        });
+      }
+      else {
+        socket.emit('tokenNotValid');
       }
     });
   });
@@ -185,7 +207,7 @@ io.on('connection', socket => {
         }
       }
       else {
-        socket.emit('join', {type: 'error', err});
+        socket.emit('tokenNotValid');
       }
     });
   });
@@ -215,7 +237,7 @@ io.on('connection', socket => {
         })
       }
       else {
-        socket.emit('create', {type: 'failed', err});
+        socket.emit('tokenNotValid');
       }
     });
   })
@@ -240,7 +262,7 @@ io.on('connection', socket => {
         }
       }
       else {
-        socket.emit('switch', {type: 'error', err});
+        socket.emit('tokenNotValid');
       }
     });
   });
@@ -280,7 +302,7 @@ io.on('connection', socket => {
         })
       }
       else {
-        socket.emit('msgInit', {type:'failed', err});
+        socket.emit('tokenNotValid');
       }
     });
   })
@@ -301,7 +323,7 @@ io.on('connection', socket => {
         socket.to(data.dest).emit('msg', {type: 'success', visible: 'private', self: false, msg: data.msg, from: decoded.name});
       }
       else {
-        socket.emit('msg', {type: 'failed', err});
+        socket.emit('tokenNotValid');
       }
     });
   });
