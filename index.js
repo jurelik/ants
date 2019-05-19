@@ -1,3 +1,4 @@
+//INIT
 const sl = require('staylow');
 const socketio = require('socket.io');
 const mongoose = require('mongoose');
@@ -7,21 +8,26 @@ const fs = require('fs');
 const jwt = require('jsonwebtoken');
 const crypto = require('crypto');
 
+//Init socket.io and a http server
 const io = socketio.listen(4000);
 sl.options({
   defaultPrompt: '',
 });
 
+//Private and public keys for JWT
 const privateKey = fs.readFileSync('./private.key', 'utf8');
 const publicKey = fs.readFileSync('./public.key', 'utf8')
 
+//Connect to MongoDB
 function serverInit() {
   sl.prompt('Enter username: ', res => {
     let username = res;
     sl.prompt('Enter password: ', true, res => {
       mongoose.connect(`mongodb+srv://${username}:${res}@jl-cluster-test-24u6z.mongodb.net/ants?retryWrites=true`, {useNewUrlParser: true}, (err) => {
-        defaultPrompt();
-        if (err) {
+        if (!err) {
+          defaultPrompt();
+        }
+        else {
           serverInit();
         }
       });
@@ -41,12 +47,13 @@ mongoose.connection.once('open', () => {
   }
   else {
     sl.log('MongoDB Error: ' + err.message);
+    serverInit();
   }
 });
 
 io.on('connection', socket => {
-
   socket.allRooms = [];
+
   //Login event
   socket.on('login', data => {
     User.findOne({name: data.name}, (err, user) => {
@@ -57,29 +64,29 @@ io.on('connection', socket => {
               //Create jwtToken
               jwt.sign({name: data.name}, privateKey, {algorithm: 'RS256', expiresIn: '1d', jwtid: socket.id}, (err, token) => {
                 if (!err) {
-                  socket.username = data.name
-                  socket.emit('login', {type: 'loginSuccessful', name: data.name, token: token});
+                  socket.username = data.name; //Save username so user can be removed from rooms on disconnect
+                  socket.emit('login', {type: 'success', name: data.name, token: token});
                 }
                 else {
-                  socket.emit('login', {type: 'error', error: err});
+                  socket.emit('login', {type: 'error', err});
                   sl.log(err);
                 }
               });
             }
             else {
-              socket.emit('login', {type: 'error', error: err});
+              socket.emit('login', {type: 'error', err});
             }
           });
         }
         else {
-          socket.emit('login', {type: 'loginFailed'});
+          socket.emit('login', {type: 'failed'});
         }
       }
       else if (!err && !user) {
-        socket.emit('login', {type: 'loginFailed'});
+        socket.emit('login', {type: 'failed'});
       }
       else {
-        socket.emit('login', {type: 'error', error: err});
+        socket.emit('login', {type: 'error', err});
       }
     });
   });
@@ -94,7 +101,7 @@ io.on('connection', socket => {
             socket.emit('register', {type: 'success'});
           }
           else {
-            socket.emit('register', {type: 'failed', err: err});
+            socket.emit('register', {type: 'error', err});
           }
         });
       }
@@ -102,7 +109,7 @@ io.on('connection', socket => {
         socket.emit('register', {type: 'userExists'});
       }
       else {
-        socket.emit('register', {type: 'failed', err: err});
+        socket.emit('register', {type: 'error', err});
       }
     });
   });
@@ -123,11 +130,11 @@ io.on('connection', socket => {
     });
   });
 
-  //lsRooms event
+  //List rooms event
   socket.on('lsRooms', data => {
     verifyToken(data, socket.id, (err, decoded) => {
       if (!err) {
-        Room.find({}, (err, res) => {
+        Room.find({}, (err, res) => { //Find all room documents and push their names into array
           if (!err && res) {
             let roomList = [];
             res.forEach(room => {
@@ -136,7 +143,7 @@ io.on('connection', socket => {
             socket.emit('lsRooms', {type: 'success', rooms: roomList});
           }
           else {
-            socket.emit('lsRooms', {type: 'failed', err});
+            socket.emit('lsRooms', {type: 'error', err});
           }
         });
       }
@@ -150,7 +157,7 @@ io.on('connection', socket => {
   socket.on('lsUsers', data => {
     verifyToken(data, socket.id, (err, decoded) => {
       if (!err) {
-        Room.findOne({name: socket.activeRoom}, (err, res) => {
+        Room.findOne({name: socket.activeRoom}, (err, res) => { //Find all users in room and push into array
           if (!err && res) {
             let userList = [];
             res.users.forEach(user => {
@@ -159,7 +166,7 @@ io.on('connection', socket => {
             socket.emit('lsUsers', {type: 'success', userList});
           }
           else {
-            socket.emit('lsUsers', {type: 'failed', err});
+            socket.emit('lsUsers', {type: 'error', err});
           }
         });
       }
@@ -174,22 +181,23 @@ io.on('connection', socket => {
     verifyToken(data, socket.id, (err, decoded) => {
       if (!err) {
         let joined = false;
+        //Check if room is joined already
         socket.allRooms.some(room => {
           if (room === data.room) {
             joined = true;
             return true;
           }
-        })
-        if (!joined) {
+        });
+        if (!joined) { //If not joined yet
           Room.findOne({name: data.room}, (err, res) => {
             if (!err && res) {
               res.users.push(data.user);
-              socket.activeRoom = data.room;
-              socket.allRooms.push(data.room);
+              socket.activeRoom = data.room; //Change activeRoom
+              socket.allRooms.push(data.room); //Add to list of all the rooms this socket has joined so far
               socket.emit('join', {type: 'success', room: data.room});
               res.save(err => {
                 if (err) {
-                  socket.emit('join', {type: 'failed', err});
+                  socket.emit('join', {type: 'error', err});
                 }
               })
             }
@@ -202,7 +210,6 @@ io.on('connection', socket => {
           });
         }
         else {
-          sl.log('yoooo');
           socket.emit('join', {type: 'alreadyJoined'});
         }
       }
@@ -217,14 +224,14 @@ io.on('connection', socket => {
     verifyToken(data, socket.id, (err, decoded) => {
       if (!err) {
         let room = new Room({name: data.room, owner: data.user.name});
-        Room.findOne({name: data.room}, (err, res) => {
+        Room.findOne({name: data.room}, (err, res) => { //Check if room exists already
           if (!err && !res) {
             room.save(err => {
               if (!err) {
                 socket.emit('create', {type: 'success', room: data.room});
               }
               else {
-                socket.emit('create', {type: 'failed', err});
+                socket.emit('create', {type: 'error', err});
               }
             })
           }
@@ -232,7 +239,7 @@ io.on('connection', socket => {
             socket.emit('create', {type: 'roomExists'});
           }
           else {
-            socket.emit('create', {type: 'failed', err});
+            socket.emit('create', {type: 'error', err});
           }
         })
       }
@@ -247,6 +254,7 @@ io.on('connection', socket => {
     verifyToken(data, socket.id, (err, decoded) => {
       if (!err) {
         let joined = false;
+        //Check if socket is connected to the room
         socket.allRooms.some(room => {
           if (room === data.room) {
             joined = true;
@@ -270,11 +278,12 @@ io.on('connection', socket => {
   //msgInit event
   socket.on('msgInit', data => {
     verifyToken(data, socket.id, (err, decoded) => {
-      if (!err && data.visible === 'public') {
+      if (!err && data.visible === 'public') { //If message is public
         let userList = [];
-        Room.find({name: socket.activeRoom}, (err, res) => {
+        //Find all users in room
+        Room.findOne({name: socket.activeRoom}, (err, res) => {
           if (!err && res) {
-            res[0].users.forEach(user => {
+            res.users.forEach(user => {
               let userData = {
                 id: user.id,
                 pubKey: user.pubKey
@@ -284,12 +293,13 @@ io.on('connection', socket => {
             socket.emit('msgInit', {type: 'success', visible: 'public', userList});
           }
           else {
-            socket.emit('msgInit', {type: 'failed'});
+            socket.emit('msgInit', {type: 'error', err});
           }
         });
       }
-      else if (!err && data.visible === 'private') {
+      else if (!err && data.visible === 'private') { //If message is private
         let userList = [];
+        //Find user
         User.findOne({name: data.dest}, (err, res) => {
           if (!err && res) {
             let userData = {
@@ -298,6 +308,12 @@ io.on('connection', socket => {
             }
             userList.push(userData);
             socket.emit('msgInit', {type: 'success', visible: 'private', userList});
+          }
+          else if (!err && !res) {
+            socket.emit('msgInit', {type: 'notFound', visible: 'private'})
+          }
+          else {
+            socket.emit('msgInit', {type: 'error', err});
           }
         })
       }

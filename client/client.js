@@ -34,19 +34,19 @@ socket.on('connect', () => {
 
 //On login
 socket.on('login', data => {
-  if (data.type === 'loginSuccessful') {
+  if (data.type === 'success') {
     session.token = data.token;
     session.user.name = data.name;
     session.user.id = socket.id;
     sl.log('Login successful');
     home();
   }
-  else if (data.type === 'loginFailed') {
+  else if (data.type === 'failed') {
     sl.log('Username or password incorrect.');
     login();
   }
   else {
-    sl.log('Error: ' + data.error)
+    sl.log('Error: ' + data.err.message);
   }
 });
 
@@ -60,8 +60,8 @@ socket.on('register', data => {
     sl.log('User already exists')
     register();
   }
-  else if (data.type === 'failed') {
-    sl.log('Error: ' + data.err);
+  else if (data.type === 'error') {
+    sl.log('Error: ' + data.err.message);
     register();
   }
   else {
@@ -95,20 +95,20 @@ socket.on('getSalt', data => {
               socket.emit('login', {name: data.name, pw: derivedKey.toString('base64'), pubKey: publicKey});
             }
             else {
-              sl.log(err);
+              sl.log('Error: ' + err.message);
               login();
             }
           });
         }
         else {
-          sl.log('Error: ' + err);
+          sl.log('Error: ' + err.message);
           login();
         }
       });
     });
   }
   else if (data.type === 'error') {
-    sl.log('Error: ' + data.err);
+    sl.log('Error: ' + data.err.message);
     login();
   }
   else {
@@ -122,8 +122,8 @@ socket.on('lsRooms', data => {
     sl.log(data.rooms);
     home();
   }
-  else if (data.type === 'failed') {
-    sl.log('Error' + data.err);
+  else if (data.type === 'error') {
+    sl.log('Error: ' + data.err.message);
     home();
   }
   else {
@@ -137,8 +137,8 @@ socket.on('lsUsers', data => {
   if (data.type === 'success') {
     sl.log(data.userList);
   }
-  else if (data.type === 'failed') {
-    sl.log('Something went wrong');
+  else if (data.type === 'error') {
+    sl.log('Error: ' + data.err.message);
   }
   else {
     sl.log('Error: Unknown');
@@ -157,22 +157,13 @@ socket.on('join', data => {
     sl.log('Room already joined, please use :switch to switch between rooms.');
     session.home ? home() : room();
   }
-  else if (data.type === 'failed') {
-    sl.log('Error: ' + data.err);
-    session.home ? home() : room();
-  }
   else if (data.type === 'notFound') {
     sl.log('Room not found');
     session.home ? home() : room();
   }
   else if (data.type === 'error') {
     sl.log('Error: ' + data.err.message);
-    if (session.home) {
-      home();
-    }
-    else {
-      room();
-    }
+    session.home ? home() : room();
   }
   else {
     sl.log('Error: Unknown');
@@ -188,8 +179,8 @@ socket.on('create', data => {
   else if (data.type === 'roomExists') {
     sl.log(`Room already exists`);
   }
-  else if (data.type === 'failed') {
-    sl.log('Error: ' + data.err);
+  else if (data.type === 'error') {
+    sl.log('Error: ' + data.err.message);
   }
   else {
     sl.log('Error: Unknown');
@@ -204,9 +195,6 @@ socket.on('switch', data => {
   }
   else if (data.type === 'failed') {
     sl.log('Please join a room first before using :switch');
-  }
-  else if (data.type === 'error') {
-    sl.log('Error: ' + data.err);
   }
   else {
     sl.log('Error: Unknown');
@@ -236,8 +224,14 @@ socket.on('msgInit', data => {
     session.msg = ''; //Delete message from memory after it is sent
     session.to = ''; //Delete 'to' value from memory after message is sent
   }
+  else if (data.type === 'notFound' && data.visible === 'private') {
+    sl.log('User not found');
+  }
+  else if (data.type === 'error') {
+    sl.log('Error: ' + err.message)
+  }
   else {
-    sl.log('Something went wrong');
+    sl.log('Error: Unknown');
   }
 });
 
@@ -279,8 +273,11 @@ socket.on('tokenNotValid', () => {
   login();
 });
 
+//
 //Function declarations
+//
 
+//Login
 function login() {
   if (session.connected === false) {
     clear();
@@ -323,6 +320,7 @@ _,-'     \\_/_|_  |\\   |\`. /   \`._,--===--.__
   });
 };
 
+//Register
 function register() {
   sl.log('REGISTER');
   sl.prompt('Enter username: ', res => {
@@ -343,6 +341,7 @@ function register() {
   });
 }
 
+//Home
 function home() {
   session.home = true;
   sl.prompt('', false, res => {
@@ -375,6 +374,7 @@ function home() {
   });
 };
 
+//Room
 function room() {
   session.home = false;
   sl.prompt('', res => {
@@ -428,6 +428,7 @@ function room() {
   })
 };
 
+//Add message to log
 function addToLog(room, msg) {
   if (session.log[room]) {
     session.log[room].push(msg);
@@ -438,6 +439,7 @@ function addToLog(room, msg) {
   }
 }
 
+//Draw log
 function drawLog(room) {
   clear();
   session.log[room].forEach(msg => {
@@ -445,6 +447,7 @@ function drawLog(room) {
   });
 }
 
+//Clear screen
 function clear() {
   process.stdout.write('\x1b[2J');
 }
