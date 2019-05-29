@@ -60,6 +60,11 @@ socket.on('register', data => {
     sl.log('User already exists')
     register();
   }
+  else if (data.type === 'badUsername') {
+    clear();
+    sl.log('Username can only contain letters, numbers and underscores and needs to be atleast 3 characters long.');
+    register();
+  }
   else if (data.type === 'error') {
     sl.log('Error: ' + data.err.message);
     register();
@@ -307,6 +312,7 @@ _,-'     \\_/_|_  |\\   |\`. /   \`._,--===--.__
   sl.prompt('Enter username: ', res => {
     if (res.startsWith(':')) {
       if(res.slice(1) === 'n') {
+        clear();
         register();
       }
       else {
@@ -324,20 +330,29 @@ _,-'     \\_/_|_  |\\   |\`. /   \`._,--===--.__
 function register() {
   sl.log('REGISTER');
   sl.prompt('Enter username: ', res => {
+    let regex = /^\w+$/;
     let username = res;
-    sl.prompt('Enter password: ', true, res => {
-      //Hash password before sending to server
-      let salt = crypto.randomBytes(128).toString('base64');
-      crypto.pbkdf2(res, salt, 100000, 128, 'sha512', (err, derivedKey) => {
-        if (!err) {
-          socket.emit('register', {name: username, pw: derivedKey.toString('base64'), salt});
-        }
-        else {
-          sl.log('Error: ' + err);
-          register();
-        }
+
+    if(regex.test(username) && username.length >= 3) {
+      sl.prompt('Enter password: ', true, res => {
+        //Hash password before sending to server
+        let salt = crypto.randomBytes(128).toString('base64');
+        crypto.pbkdf2(res, salt, 100000, 128, 'sha512', (err, derivedKey) => {
+          if (!err) {
+            socket.emit('register', {name: username, pw: derivedKey.toString('base64'), salt});
+          }
+          else {
+            sl.log('Error: ' + err);
+            register();
+          }
+        });
       });
-    })
+    }
+    else {
+      clear();
+      sl.log('Username can only contain letters, numbers and underscores and needs to be atleast 3 characters long.');
+      register();
+    }
   });
 }
 

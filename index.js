@@ -93,25 +93,31 @@ io.on('connection', socket => {
 
   //Register event
   socket.on('register', data => {
-    let user = new User({name: data.name, pw: data.pw, salt: data.salt, id: socket.id, pubKey: {}});
-    User.findOne({name: user.name}, (err, docs) => { //Check if user exists already
-      if (!docs && !err) {
-        user.save(err => {
-          if (!err) {
-            socket.emit('register', {type: 'success'});
-          }
-          else {
-            socket.emit('register', {type: 'error', err});
-          }
-        });
-      }
-      else if (docs && !err) {
-        socket.emit('register', {type: 'userExists'});
-      }
-      else {
-        socket.emit('register', {type: 'error', err});
-      }
-    });
+    let regex = /^\w+$/;
+    if (regex.test(data.name) && data.name.length >= 3) {
+      let user = new User({name: data.name, pw: data.pw, salt: data.salt, id: socket.id, pubKey: {}});
+      User.findOne({name: user.name}, (err, docs) => { //Check if user exists already
+        if (!docs && !err) {
+          user.save(err => {
+            if (!err) {
+              socket.emit('register', {type: 'success'});
+            }
+            else {
+              socket.emit('register', {type: 'error', err});
+            }
+          });
+        }
+        else if (docs && !err) {
+          socket.emit('register', {type: 'userExists'});
+        }
+        else {
+          socket.emit('register', {type: 'error', err});
+        }
+      });
+    }
+    else {
+      socket.emit('register', {type: 'badUsername'});
+    }
   });
 
   //getSalt event
