@@ -197,9 +197,18 @@ io.on('connection', socket => {
         if (!joined) { //If not joined yet
           Room.findOne({name: data.room}, (err, res) => {
             if (!err && res) {
-              res.users.push(data.user);
+              let userList = [];
               socket.activeRoom = data.room; //Change activeRoom
               socket.allRooms.push(data.room); //Add to list of all the rooms this socket has joined so far
+              res.users.forEach(user => {
+                let userData = {
+                  id: user.id,
+                  pubKey: user.pubKey
+                };
+                userList.push(userData);
+              });
+              res.users.push(data.user);
+              socket.emit('msgInit', {type: 'userJoined', userList, from: decoded.name});
               socket.emit('join', {type: 'success', room: data.room});
               res.save(err => {
                 if (err) {
@@ -343,6 +352,9 @@ io.on('connection', socket => {
           socket.emit('msg', {type: 'success', visible: 'private', self: true, msg: data.msg, to: data.to});
         }
         socket.to(data.dest).emit('msg', {type: 'success', visible: 'private', self: false, msg: data.msg, from: decoded.name});
+      }
+      else if (!err && data.visible === 'userJoined') {
+        socket.to(data.dest).emit('msg', {type: 'userJoined', msg: data.msg, room: socket.activeRoom});
       }
       else {
         socket.emit('tokenNotValid');

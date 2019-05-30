@@ -9,7 +9,7 @@ sl.options({
   logOnEnter: 'false'
 });
 let session = {
-  activeRooom: '',
+  activeRoom: '',
   connected: false,
   log: {},
   user: {}
@@ -229,6 +229,12 @@ socket.on('msgInit', data => {
     session.msg = ''; //Delete message from memory after it is sent
     session.to = ''; //Delete 'to' value from memory after message is sent
   }
+  else if (data.type === 'userJoined') {
+    data.userList.forEach(user => {
+      const msg = crypto.publicEncrypt(user.pubKey, Buffer.from(`${data.from} joined the room.`));
+      socket.emit('msg', {msg, dest: user.id, visible: 'userJoined', token: session.token});
+    });
+  }
   else if (data.type === 'notFound' && data.visible === 'private') {
     sl.log('User not found');
   }
@@ -262,6 +268,17 @@ socket.on('msg', data => {
     else {
       sl.log(`PRIVATE to ${data.to}: ${msg.toString()}`);
       addToLog(data.to, `PRIVATE to ${data.to}: ${msg.toString()}`);
+    }
+  }
+  else if (data.type === 'userJoined') {
+    if (session.activeRoom === data.room) {
+      const msg = crypto.privateDecrypt(session.privateKey, data.msg);
+      sl.log(msg.toString());
+      addToLog(data.room, msg.toString());
+    }
+    else {
+      const msg = crypto.privateDecrypt(session.privateKey, data.msg);
+      addToLog(data.room, msg.toString());
     }
   }
   else if (data.type === 'failed') {
