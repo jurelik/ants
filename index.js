@@ -238,25 +238,31 @@ io.on('connection', socket => {
   socket.on('create', data => {
     verifyToken(data, socket.id, (err, decoded) => {
       if (!err) {
-        let room = new Room({name: data.room, owner: data.user.name});
-        Room.findOne({name: data.room}, (err, res) => { //Check if room exists already
-          if (!err && !res) {
-            room.save(err => {
-              if (!err) {
-                socket.emit('create', {type: 'success', room: data.room});
-              }
-              else {
-                socket.emit('create', {type: 'error', err});
-              }
-            })
-          }
-          else if (!err && res) {
-            socket.emit('create', {type: 'roomExists'});
-          }
-          else {
-            socket.emit('create', {type: 'error', err});
-          }
-        })
+        let regex = /^\w+$/;
+        if (regex.test(data.room) && data.room.length >= 3) {
+          let room = new Room({name: data.room, owner: data.user.name});
+          Room.findOne({name: data.room}, (err, res) => { //Check if room exists already
+            if (!err && !res) {
+              room.save(err => {
+                if (!err) {
+                  socket.emit('create', {type: 'success', room: data.room});
+                }
+                else {
+                  socket.emit('create', {type: 'error', err});
+                }
+              })
+            }
+            else if (!err && res) {
+              socket.emit('create', {type: 'roomExists'});
+            }
+            else {
+              socket.emit('create', {type: 'error', err});
+            }
+          });
+        }
+        else {
+          socket.emit('create', {type: 'badName'});
+        }
       }
       else {
         socket.emit('tokenNotValid');

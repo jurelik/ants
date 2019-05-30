@@ -184,6 +184,9 @@ socket.on('create', data => {
   else if (data.type === 'roomExists') {
     sl.log(`Room already exists`);
   }
+  else if (data.type === 'badName') {
+    sl.log('Username can only contain letters, numbers and underscores and needs to be atleast 3 characters long.');
+  }
   else if (data.type === 'error') {
     sl.log('Error: ' + data.err.message);
   }
@@ -386,8 +389,16 @@ function home() {
     }
     else if (res.startsWith(':create ')) {
       let room = res.slice(8);
-      socket.emit('create', {room, user: session.user, token: session.token});
-      home();
+      let regex = /^\w+$/;
+
+      if (regex.test(room) && room.length >= 3) {
+        socket.emit('create', {room, user: session.user, token: session.token});
+        home();
+      }
+      else {
+        sl.log('Room name can only contain letters, numbers and underscores and needs to be atleast 3 characters long.');
+        home();
+      }
     }
     else if (res.startsWith(':p ')) {
       let array = res.split(' ');
