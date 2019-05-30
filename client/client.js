@@ -153,7 +153,9 @@ socket.on('lsUsers', data => {
 //On join
 socket.on('join', data => {
   if (data.type === 'success') {
+    clear();
     sl.log(`Room successfully joined: ${data.room}`);
+    sl.log(data.welcome);
     session.activeRoom = data.room;
     session.log[data.room] = [];
     room();
@@ -286,6 +288,22 @@ socket.on('msg', data => {
   }
   else if (data.type === 'failed') {
     sl.log('Error: ' + err.message);
+  }
+  else {
+    sl.log('Error: Unknown');
+  }
+});
+
+//On welcome
+socket.on('welcome', data => {
+  if (data.type === 'success') {
+    sl.log('Welcome message successfully changed.');
+  }
+  else if (data.type === 'badOwner') {
+    sl.log('You do not have permission to change the welcome message.')
+  }
+  else if (data.type === 'error') {
+    sl.log('Error: ', data.err.message);
   }
   else {
     sl.log('Error: Unknown');
@@ -456,6 +474,11 @@ function room() {
       }
       else if (res === ':ls') {
         socket.emit('lsUsers', {token: session.token});
+        room();
+      }
+      else if (res.startsWith(':welcome ')) {
+        let msg = res.slice(9);
+        socket.emit('welcome', {msg, token: session.token});
         room();
       }
       else {

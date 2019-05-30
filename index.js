@@ -64,7 +64,7 @@ io.on('connection', socket => {
               //Create jwtToken
               jwt.sign({name: data.name}, privateKey, {algorithm: 'RS256', expiresIn: '1d', jwtid: socket.id}, (err, token) => {
                 if (!err) {
-                  socket.username = data.name; //Save username so user can be removed from rooms on disconnect
+                  socket.username = data.name; //Save username so user can be removed from rooms on disconnect and checked for room ownership
                   socket.emit('login', {type: 'success', name: data.name, token: token});
                 }
                 else {
@@ -209,7 +209,7 @@ io.on('connection', socket => {
               });
               res.users.push(data.user);
               socket.emit('msgInit', {type: 'userJoined', userList, from: decoded.name});
-              socket.emit('join', {type: 'success', room: data.room});
+              socket.emit('join', {type: 'success', room: data.room, welcome: res.welcome});
               res.save(err => {
                 if (err) {
                   socket.emit('join', {type: 'error', err});
@@ -240,7 +240,7 @@ io.on('connection', socket => {
       if (!err) {
         let regex = /^\w+$/;
         if (regex.test(data.room) && data.room.length >= 3) {
-          let room = new Room({name: data.room, owner: data.user.name});
+          let room = new Room({name: data.room, owner: data.user.name, welcome: `Welcome to ${data.room}!`});
           Room.findOne({name: data.room}, (err, res) => { //Check if room exists already
             if (!err && !res) {
               room.save(err => {
@@ -361,6 +361,43 @@ io.on('connection', socket => {
       }
       else if (!err && data.visible === 'userJoined') {
         socket.to(data.dest).emit('msg', {type: 'userJoined', msg: data.msg, room: socket.activeRoom});
+      }
+      else {
+        socket.emit('tokenNotValid');
+      }
+    });
+  });
+
+  //Welcome message set event
+  socket.on('welcome', data => {
+    verifyToken(data, socket.id, (err, decoded) => {
+      if (!err) {
+        Room.findOne({name: socket.activeRoom}, (err, res) => {
+          if (!err && res) {
+            if (res.owner === socket.username) {
+              res.welcome = data.msg;
+              res.save(err => {
+                if (!err) {
+                  socket.emit('welcome', {type: 'success'});
+                }
+                else {
+                  socket.emit('welcome', {type: 'error', err});
+                }
+              });
+            }
+            else {
+              socket.emit('welcome', {type: 'badOwner'});
+            }
+          }
+          else {
+            if (err) {
+              socket.emit('welcome', {type: 'error', err});
+            }
+            else {
+              socket.emit('welcome', {type: 'error', [err.message]: 'Unknown'});
+            }
+          }
+        });
       }
       else {
         socket.emit('tokenNotValid');
