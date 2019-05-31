@@ -197,21 +197,19 @@ io.on('connection', socket => {
         if (!joined) { //If not joined yet
           Room.findOne({name: data.room}, (err, res) => {
             if (!err && res) {
-              let userList = [];
               socket.activeRoom = data.room; //Change activeRoom
               socket.allRooms.push(data.room); //Add to list of all the rooms this socket has joined so far
               res.users.forEach(user => {
-                let userData = {
-                  id: user.id,
-                  pubKey: user.pubKey
-                };
-                userList.push(userData);
+                const msg = crypto.publicEncrypt(user.pubKey, Buffer.from(`${socket.username} joined the room.`));
+                socket.to(user.id).emit('msg', {type: 'userJoined', msg, room: socket.activeRoom});
               });
               res.users.push(data.user);
-              socket.emit('msgInit', {type: 'userJoined', userList, from: decoded.name});
               socket.emit('join', {type: 'success', room: data.room, welcome: res.welcome});
               res.save(err => {
-                if (err) {
+                if (!err) {
+                  socket.emit('join', {type: 'success', room: data.room, welcome: res.welcome});
+                }
+                else {
                   socket.emit('join', {type: 'error', err});
                 }
               })
@@ -359,9 +357,6 @@ io.on('connection', socket => {
         }
         socket.to(data.dest).emit('msg', {type: 'success', visible: 'private', self: false, msg: data.msg, from: decoded.name});
       }
-      else if (!err && data.visible === 'userJoined') {
-        socket.to(data.dest).emit('msg', {type: 'userJoined', msg: data.msg, room: socket.activeRoom});
-      }
       else {
         socket.emit('tokenNotValid');
       }
@@ -409,15 +404,25 @@ io.on('connection', socket => {
   socket.on('disconnect', data => {
     socket.allRooms.forEach(room => {
       Room.findOne({name: room}, (err, res) => {
-        res.users.some(user => {
-          if (user.name === socket.username) {
-            res.users.splice(res.users.indexOf(user), 1);
-            res.save();
-            return true;
+        for (x = 0; x < res.users.length; x++) {
+          if (res.users[x].name === socket.username) {
+            sl.log(res.users[x].name);
+            sl.log(socket.username);
+            res.users.splice(x, 1);
+            res.save(err => {
+              if (err) {
+                sl.log(err.message);
+              }
+            });
+            x--;
           }
-        });
-      })
-    })
+          else {
+            const msg = crypto.publicEncrypt(res.users[x].pubKey, Buffer.from(`${socket.username} left the room.`))
+            socket.to(res.users[x].id).emit('msg', {type: 'userLeft', msg, room: res.name});
+          }
+        }
+      });
+    });
   });
 });
 

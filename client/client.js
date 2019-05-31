@@ -286,6 +286,12 @@ socket.on('msg', data => {
       addToLog(data.room, msg.toString());
     }
   }
+  else if (data.type === 'userLeft') {
+    if (session.activeRoom === data.room) {
+      const msg = crypto.privateDecrypt(session.privateKey, data.msg);
+      sl.log(msg.toString());
+    }
+  }
   else if (data.type === 'failed') {
     sl.log('Error: ' + err.message);
   }
