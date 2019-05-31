@@ -232,6 +232,46 @@ io.on('connection', socket => {
     });
   });
 
+  //Leave room event
+  socket.on('leave', data => {
+    verifyToken(data, socket.id, (err, decoded) => {
+      if (!err) {
+        Room.findOne({name: data.room}, (err, res) => {
+          if (!err && res) {
+            for (x = 0; x < res.users.length; x++) {
+              if (res.users[x].name === socket.username) {
+                res.users.splice(x, 1); // Remove user from room
+                socket.allRooms.splice(socket.allRooms.indexOf(data.room), 1); //Remove room from list of rooms socket is connected to
+                res.save(err => {
+                  if (!err) {
+                    socket.emit('leave', {type: 'success', room: data.room});
+                  }
+                  else {
+                    socket.emit('leave', {type: 'error', err});
+                  }
+                });
+                x--;
+              }
+              else {
+                const msg = crypto.publicEncrypt(res.users[x].pubKey, Buffer.from(`${socket.username} left the room.`))
+                socket.to(res.users[x].id).emit('msg', {type: 'userLeft', msg, room: res.name});
+              }
+            }
+          }
+          else if (!err && !res) {
+            socket.emit('leave', {type: 'roomNotFound'});
+          }
+          else {
+            socket.emit('leave', {type: 'error', err});
+          }
+        });
+      }
+      else {
+        socket.emit('tokenNotValid');
+      }
+    });
+  });
+
   //Create room event
   socket.on('create', data => {
     verifyToken(data, socket.id, (err, decoded) => {
@@ -406,8 +446,6 @@ io.on('connection', socket => {
       Room.findOne({name: room}, (err, res) => {
         for (x = 0; x < res.users.length; x++) {
           if (res.users[x].name === socket.username) {
-            sl.log(res.users[x].name);
-            sl.log(socket.username);
             res.users.splice(x, 1);
             res.save(err => {
               if (err) {

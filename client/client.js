@@ -178,6 +178,28 @@ socket.on('join', data => {
   }
 });
 
+//On leave
+socket.on('leave', data => {
+  if (data.type === 'success') {
+    sl.log(`You have left room '${data.room}'`);
+    delete session.log[data.room];
+    session.activeRoom = '';
+    home();
+  }
+  else if (data.type === 'roomNotFound') {
+    sl.log(`You can't leave a room you never joined.`);
+    room();
+  }
+  else if (data.type === 'error') {
+    sl.log('Error: ' + data.err.message);
+    room();
+  }
+  else {
+    sl.log('Error: Unknown');
+    room();
+  }
+});
+
 //On create
 socket.on('create', data => {
   if (data.type === 'success') {
@@ -290,6 +312,11 @@ socket.on('msg', data => {
     if (session.activeRoom === data.room) {
       const msg = crypto.privateDecrypt(session.privateKey, data.msg);
       sl.log(msg.toString());
+      addToLog(data.room, msg.toString());
+    }
+    else {
+      const msg = crypto.privateDecrypt(session.privateKey, data.msg);
+      addToLog(data.room, msg.toString());
     }
   }
   else if (data.type === 'failed') {
@@ -464,6 +491,9 @@ function room() {
         let _room = res.slice(8);
         socket.emit('switch', {room: _room, token: session.token});
         room();
+      }
+      else if (res.startsWith(':leave')) {
+        socket.emit('leave', {room: session.activeRoom, token: session.token});
       }
       else if (res.startsWith(':log ')) {
         let user = res.slice(5);
