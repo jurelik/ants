@@ -196,7 +196,7 @@ io.on('connection', socket => {
         });
         if (!joined) { //If not joined yet
           Room.findOne({name: data.room}, (err, res) => {
-            if (!err && res) {
+            if (!err && res && !res.private) {
               socket.activeRoom = data.room; //Change activeRoom
               socket.allRooms.push(data.room); //Add to list of all the rooms this socket has joined so far
               res.users.forEach(user => {
@@ -212,7 +212,10 @@ io.on('connection', socket => {
                 else {
                   socket.emit('join', {type: 'error', err});
                 }
-              })
+              });
+            }
+            else if (!err && res && res.private) {
+              socket.emit('join', {type: 'private', room: data.room, salt: res.salt});
             }
             else if (!err && !res) {
               socket.emit('join', {type: 'notFound'})
@@ -225,6 +228,45 @@ io.on('connection', socket => {
         else {
           socket.emit('join', {type: 'alreadyJoined'});
         }
+      }
+      else {
+        socket.emit('tokenNotValid');
+      }
+    });
+  });
+
+  //Join private room event
+  socket.on('joinPrivate', data => {
+    verifyToken(data, socket.id, (err, decoded) => {
+      if (!err) {
+        Room.findOne({name: data.room}, (err, res) => {
+          if (!err && res) {
+            if (data.pw === res.pw) {
+              socket.activeRoom = data.room; //Change activeRoom
+              socket.allRooms.push(data.room); //Add to list of all the rooms this socket has joined so far
+              res.users.forEach(user => {
+                const msg = crypto.publicEncrypt(user.pubKey, Buffer.from(`${socket.username} joined the room.`));
+                socket.to(user.id).emit('msg', {type: 'userJoined', msg, room: socket.activeRoom});
+              });
+              res.users.push(data.user);
+              socket.emit('join', {type: 'success', room: data.room, welcome: res.welcome});
+              res.save(err => {
+                if (!err) {
+                  socket.emit('join', {type: 'success', room: data.room, welcome: res.welcome});
+                }
+                else {
+                  socket.emit('join', {type: 'error', err});
+                }
+              });
+            }
+            else {
+              socket.emit('join', {type: 'wrongPassword'});
+            }
+          }
+          else {
+            socket.emit('join', {type: 'error', err});
+          }
+        });
       }
       else {
         socket.emit('tokenNotValid');
@@ -278,25 +320,48 @@ io.on('connection', socket => {
       if (!err) {
         let regex = /^\w+$/;
         if (regex.test(data.room) && data.room.length >= 3) {
-          let room = new Room({name: data.room, owner: data.user.name, welcome: `Welcome to ${data.room}!`});
-          Room.findOne({name: data.room}, (err, res) => { //Check if room exists already
-            if (!err && !res) {
-              room.save(err => {
-                if (!err) {
-                  socket.emit('create', {type: 'success', room: data.room});
-                }
-                else {
-                  socket.emit('create', {type: 'error', err});
-                }
-              })
-            }
-            else if (!err && res) {
-              socket.emit('create', {type: 'roomExists'});
-            }
-            else {
-              socket.emit('create', {type: 'error', err});
-            }
-          });
+          if (!data.private) {
+            let room = new Room({name: data.room, owner: data.user.name, private: false, welcome: `Welcome to ${data.room}!`});
+            Room.findOne({name: data.room}, (err, res) => { //Check if room exists already
+              if (!err && !res) {
+                room.save(err => {
+                  if (!err) {
+                    socket.emit('create', {type: 'success', room: data.room});
+                  }
+                  else {
+                    socket.emit('create', {type: 'error', err});
+                  }
+                })
+              }
+              else if (!err && res) {
+                socket.emit('create', {type: 'roomExists'});
+              }
+              else {
+                socket.emit('create', {type: 'error', err});
+              }
+            });
+          }
+          else {
+            let room = new Room({name: data.room, owner: data.user.name, private: true, pw: data.pw, salt: data.salt, welcome: `Welcome to ${data.room}!`});
+            Room.findOne({name: data.room}, (err, res) => {
+              if (!err && !res) {
+                room.save(err => {
+                  if (!err) {
+                    socket.emit('create', {type: 'success', room: data.room});
+                  }
+                  else {
+                    socket.emit('create', {type: 'error', err});
+                  }
+                });
+              }
+              else if (!err && res) {
+                socket.emit('create', {type: 'roomExists'});
+              }
+              else {
+                socket.emit('create', {type: 'error', err});
+              }
+            });
+          }
         }
         else {
           socket.emit('create', {type: 'badName'});

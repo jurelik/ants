@@ -160,8 +160,26 @@ socket.on('join', data => {
     session.log[data.room] = [];
     room();
   }
+  else if (data.type === 'private') {
+    sl.prompt('Enter password: ', true, res => {
+      let salt = data.salt;
+      crypto.pbkdf2(res, salt, 100000, 128, 'sha512', (err, derivedKey) => {
+        if (!err) {
+          socket.emit('joinPrivate', {room: data.room, user: session.user, private: true, pw: derivedKey.toString('base64'), token: session.token});
+        }
+        else {
+          sl.log('Error: ' + err);
+          session.home ? home() : room();
+        }
+      });
+    });
+  }
   else if (data.type === 'alreadyJoined') {
     sl.log('Room already joined, please use :switch to switch between rooms.');
+    session.home ? home() : room();
+  }
+  else if (data.type === 'wrongPassword') {
+    sl.log('The password you entered is wrong.');
     session.home ? home() : room();
   }
   else if (data.type === 'notFound') {
@@ -443,8 +461,33 @@ function home() {
       let regex = /^\w+$/;
 
       if (regex.test(room) && room.length >= 3) {
-        socket.emit('create', {room, user: session.user, token: session.token});
-        home();
+        sl.prompt('Do you want to make the room private? y/n', res => {
+          if (res === 'n') {
+            socket.emit('create', {room, user: session.user, private: false, token: session.token});
+            home();
+          }
+          else if (res === 'y') {
+            sl.prompt('Enter room password: ', true, res => {
+              //Hash password before sending to server
+              let salt = crypto.randomBytes(128).toString('base64');
+              crypto.pbkdf2(res, salt, 100000, 128, 'sha512', (err, derivedKey) => {
+                if (!err) {
+                  socket.emit('create', {room, user: session.user, private: true, pw: derivedKey.toString('base64'), salt, token: session.token});
+                  home();
+                }
+                else {
+                  sl.log('Error: ' + err);
+                  home();
+                }
+              });
+            });
+          }
+          else {
+            sl.log('Command not recognized.');
+            home();
+          }
+        });
+        
       }
       else {
         sl.log('Room name can only contain letters, numbers and underscores and needs to be atleast 3 characters long.');
