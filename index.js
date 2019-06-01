@@ -144,7 +144,9 @@ io.on('connection', socket => {
           if (!err && res) {
             let roomList = [];
             res.forEach(room => {
-              roomList.push(room.name);
+              if (!room.private) {
+                roomList.push(room.name);
+              }
             });
             socket.emit('lsRooms', {type: 'success', rooms: roomList});
           }
@@ -204,7 +206,6 @@ io.on('connection', socket => {
                 socket.to(user.id).emit('msg', {type: 'userJoined', msg, room: socket.activeRoom});
               });
               res.users.push(data.user);
-              socket.emit('join', {type: 'success', room: data.room, welcome: res.welcome});
               res.save(err => {
                 if (!err) {
                   socket.emit('join', {type: 'success', room: data.room, welcome: res.welcome});
@@ -249,7 +250,6 @@ io.on('connection', socket => {
                 socket.to(user.id).emit('msg', {type: 'userJoined', msg, room: socket.activeRoom});
               });
               res.users.push(data.user);
-              socket.emit('join', {type: 'success', room: data.room, welcome: res.welcome});
               res.save(err => {
                 if (!err) {
                   socket.emit('join', {type: 'success', room: data.room, welcome: res.welcome});
@@ -509,20 +509,24 @@ io.on('connection', socket => {
   socket.on('disconnect', data => {
     socket.allRooms.forEach(room => {
       Room.findOne({name: room}, (err, res) => {
-        for (x = 0; x < res.users.length; x++) {
-          if (res.users[x].name === socket.username) {
-            res.users.splice(x, 1);
-            res.save(err => {
-              if (err) {
-                sl.log(err.message);
-              }
-            });
-            x--;
+        if (!err) {
+          for (x = 0; x < res.users.length; x++) {
+            if (res.users[x].name === socket.username) {
+              res.users.splice(x, 1);
+              res.save(err => {
+                if (err) {
+                  sl.log(err.message);
+                }
+              });
+              x--;
+            }
+            else {
+              const msg = crypto.publicEncrypt(res.users[x].pubKey, Buffer.from(`${socket.username} left the room.`))
+            }
           }
-          else {
-            const msg = crypto.publicEncrypt(res.users[x].pubKey, Buffer.from(`${socket.username} left the room.`))
-            socket.to(res.users[x].id).emit('msg', {type: 'userLeft', msg, room: res.name});
-          }
+        }
+        else {
+          sl.log(err.message);
         }
       });
     });

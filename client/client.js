@@ -242,12 +242,15 @@ socket.on('switch', data => {
   if (data.type === 'success') {
     drawLog(data.room);
     session.activeRoom = data.room;
+    room();
   }
   else if (data.type === 'failed') {
     sl.log('Please join a room first before using :switch');
+    room();
   }
   else {
     sl.log('Error: Unknown');
+    room();
   }
 });
 
@@ -373,6 +376,7 @@ socket.on('tokenNotValid', () => {
 
 //Login
 function login() {
+  setTitle('ants');
   if (session.connected === false) {
     clear();
     sl.log(``);
@@ -448,6 +452,7 @@ function register() {
 //Home
 function home() {
   session.home = true;
+  setTitle('home');
   sl.prompt('', false, res => {
     if (res === ':ls') {
       socket.emit('lsRooms', {token: session.token});
@@ -514,6 +519,7 @@ function home() {
 //Room
 function room() {
   session.home = false;
+  setTitle(session.activeRoom);
   sl.prompt('', res => {
     if (res.startsWith(':')) {
       if (res.startsWith(':join ')) {
@@ -533,7 +539,6 @@ function room() {
       else if (res.startsWith(':switch ')) {
         let _room = res.slice(8);
         socket.emit('switch', {room: _room, token: session.token});
-        room();
       }
       else if (res.startsWith(':leave')) {
         socket.emit('leave', {room: session.activeRoom, token: session.token});
@@ -590,6 +595,14 @@ function drawLog(room) {
   session.log[room].forEach(msg => {
     sl.log(msg);
   });
+}
+
+//Change bash title
+function setTitle(title)
+{
+  process.stdout.write(
+    String.fromCharCode(27) + "]0;" + title + String.fromCharCode(7)
+  );
 }
 
 //Clear screen
