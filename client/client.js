@@ -112,7 +112,7 @@ socket.on('lsUsers', data => {
     sl.log(data.userList);
   }
   else if (data.type === 'error') {
-    sl.log('Error: ' + data.err.message);
+    sl.log('Error: ' + data.err);
   }
   else {
     sl.log('Error: Unknown');
@@ -248,7 +248,7 @@ socket.on('msgInit', data => {
     sl.log('User not online.');
   }
   else if (data.type === 'error') {
-    sl.log('Error: ' + err.message)
+    sl.log('Error: ' + data.err)
   }
   else {
     sl.log('Error: Unknown');
@@ -306,6 +306,87 @@ socket.on('msg', data => {
   }
   else {
     sl.log('Error: Unknown');
+  }
+});
+
+//On deleteRoomInit
+socket.on('deleteRoomInit', data => {
+  if (data.type === 'success') {
+    sl.prompt(`This will delete the room '${data.room}'. Are you sure you want to proceed (y/n): `, res => {
+      if (res === 'y') {
+        sl.prompt('Enter your user password: ', true, res => {
+          let pw1 = res;
+          sl.prompt('Confirm password: ', true, res => {
+            if (pw1 === res) {
+              crypto.pbkdf2(res, data.salt, 100000, 128, 'sha512', (err, derivedKey) => {
+                if (!err) {
+                  socket.emit('deleteRoom', {room: data.room, pw: derivedKey.toString('base64'), token: session.token});
+                }
+                else {
+                  sl.log('Error: ' + err.message);
+                  room();
+                }
+              });
+            }
+            else {
+              sl.log("The passwords you entered didn't match. Aborting delete.");
+              room();
+            }
+          });
+        });
+      }
+      else if (res === 'n') {
+        sl.log('Aborting delete.');
+        room();
+      }
+      else {
+        sl.log('Command not recognized.');
+        room();
+      }
+    });
+  }
+  else if (data.type === 'noPermission') {
+    sl.log("You don't have permission to delete this room.");
+    room();
+  }
+  else if (data.type === 'error') {
+    sl.log('Something went wrong.');
+    room();
+  }
+  else {
+    sl.log('Error: Unknown');
+    room();
+  }
+});
+
+//On deleteRoom
+socket.on('deleteRoom', data => {
+  if (data.type === 'success') {
+    sl.log('Room successfully deleted.');
+    home();
+  }
+  else if (data.type === 'wrongPassword') {
+    sl.log('The password you entered was wrong. Aborting delete.');
+    room();
+  }
+  else if (data.type === 'error') {
+    sl.log('Something went wrong.');
+    room();
+  }
+  else {
+    sl.log('Error: Unknown');
+    room();
+  }
+});
+
+//On roomDeleted
+socket.on('roomDeleted', data => {
+  if (session.activeRoom === data.room) {
+    sl.log(`Room has been deleted.`);
+    session.activeRoom = '';
+  }
+  else {
+    sl.log(`Room '${data.room}' has been deleted.`);
   }
 });
 
@@ -474,10 +555,16 @@ function room() {
         socket.emit('lsUsers', {token: session.token});
         room();
       }
+      else if (res === ':home') {
+        home();
+      }
       else if (res.startsWith(':welcome ')) {
         let msg = res.slice(9);
         socket.emit('welcome', {msg, token: session.token});
         room();
+      }
+      else if (res === ':delete') {
+        socket.emit('deleteRoomInit', {room: session.activeRoom, token: session.token});
       }
       else {
         sl.log('Command not found');
@@ -591,7 +678,7 @@ function createRoom(res) {
   let regex = /^\w+$/;
 
   if (regex.test(room) && room.length >= 3) {
-    sl.prompt('Do you want to make the room private? y/n', res => {
+    sl.prompt('Do you want to make the room private (y/n): ', res => {
       if (res === 'n') {
         socket.emit('create', {room, user: session.user, private: false, token: session.token});
         home();

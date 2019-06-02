@@ -410,6 +410,9 @@ io.on('connection', socket => {
             });
             socket.emit('msgInit', {type: 'success', visible: 'public', userList});
           }
+          else if (!err && !res) {
+            socket.emit('msgInit', {type: 'error', err: 'Room does not exists.'});
+          }
           else {
             socket.emit('msgInit', {type: 'error', err});
           }
@@ -502,17 +505,81 @@ io.on('connection', socket => {
     });
   });
 
+  //Delete room init event
+  socket.on('deleteRoomInit', data => {
+    verifyToken(data, socket.id, (err, decoded) => {
+      if (!err) {
+        Room.findOne({name: data.room}, (err, res) => {
+          if (!err && res && res.owner === decoded.name) {
+            User.findOne({name: decoded.name}, (err, res) => {
+              if (!err) {
+                socket.emit('deleteRoomInit', {type: 'success', room: data.room, salt: res.salt});
+              }
+              else {
+                socket.emit('deleteRoomInit', {type: 'error'});
+              }
+            })
+            
+          }
+          else if (!err && res && res.owner != decoded.name) {
+            socket.emit('deleteRoomInit', {type: 'noPermission'});
+          }
+          else {
+            socket.emit('deleteRoomInit', {type: 'error'});
+          }
+        });
+      }
+      else {
+        socket.emit('tokenNotValid');
+      }
+    });
+  });
+
+  //Delete room event
+  socket.on('deleteRoom', data => {
+    verifyToken(data, socket.id, (err, decoded) => {
+      if (!err) {
+        User.findOne({name: decoded.name}, (err, res) => {
+          if (!err && res && data.pw === res.pw) {
+            Room.findOneAndDelete({name: data.room}, (err, res) => {
+              if (!err) {
+                socket.allRooms.splice(socket.allRooms.indexOf(data.room), 1);
+                socket.emit('deleteRoom', {type: 'success', room: data.room});
+
+                res.users.forEach(user => {
+                  socket.to(user.id).emit('roomDeleted', {room: data.room});
+                });
+              }
+              else {
+                sl.log(err);
+              }
+            })
+          }
+          else if (!err && res && data.pw != res.pw) {
+            socket.emit('deleteRoom', {type: 'wrongPassword'});
+          }
+          else {
+            socket.emit('deleteRoom', {type: 'error'});
+          }
+        });
+      }
+      else {
+        socket.emit('tokenNotValid');
+      }
+    }) 
+  });
+
   //Disconnect event
   socket.on('disconnect', data => {
     socket.allRooms.forEach(room => {
       Room.findOne({name: room}, (err, res) => {
-        if (!err) {
+        if (!err && res) {
           for (x = 0; x < res.users.length; x++) {
             if (res.users[x].name === socket.username) {
               res.users.splice(x, 1);
               res.save(err => {
                 if (err) {
-                  sl.log(err.message);
+                  sl.log(err);
                 }
               });
               x--;
@@ -523,7 +590,7 @@ io.on('connection', socket => {
           }
         }
         else {
-          sl.log(err.message);
+          sl.log('Joined room not found after disconnect.');
         }
       });
     });
