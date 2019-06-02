@@ -7,6 +7,7 @@ const UserSchema = new Schema({
   pw: String,
   id: String,
   salt: String,
+  online: Boolean,
   pubKey: {}
 });
 

@@ -10,13 +10,14 @@ const crypto = require('crypto');
 
 //Init socket.io and a http server
 const io = socketio.listen(4000);
-sl.options({
-  defaultPrompt: '',
-});
 
 //Private and public keys for JWT
 const privateKey = fs.readFileSync('./private.key', 'utf8');
-const publicKey = fs.readFileSync('./public.key', 'utf8')
+const publicKey = fs.readFileSync('./public.key', 'utf8');
+
+sl.options({
+  defaultPrompt: '',
+});
 
 //Connect to MongoDB
 function serverInit() {
@@ -58,25 +59,18 @@ io.on('connection', socket => {
   socket.on('login', data => {
     User.findOne({name: data.name}, (err, user) => {
       if (!err && user) { //If user exists
-        if (user.pw === data.pw) { //If password is correct
-          User.updateOne({name: data.name}, {id: socket.id, pubKey: data.pubKey}, (err, raw) => { //Update id to current session socket.id
+        if (user.pw === data.pw && !user.online) { //If password is correct
+          User.updateOne({name: data.name}, {id: socket.id, pubKey: data.pubKey, online: true}, (err, raw) => { //Update id to current session socket.id
             if (!err) {
-              //Create jwtToken
-              jwt.sign({name: data.name}, privateKey, {algorithm: 'RS256', expiresIn: '1d', jwtid: socket.id}, (err, token) => {
-                if (!err) {
-                  socket.username = data.name; //Save username so user can be removed from rooms on disconnect and checked for room ownership
-                  socket.emit('login', {type: 'success', name: data.name, token: token});
-                }
-                else {
-                  socket.emit('login', {type: 'error', err});
-                  sl.log(err);
-                }
-              });
+              createToken(data, socket);
             }
             else {
               socket.emit('login', {type: 'error', err});
             }
           });
+        }
+        else if (user.pw === data.pw && user.online) {
+          socket.emit('login', {type: 'alreadyOnline'});
         }
         else {
           socket.emit('login', {type: 'failed'});
@@ -425,13 +419,16 @@ io.on('connection', socket => {
         let userList = [];
         //Find user
         User.findOne({name: data.dest}, (err, res) => {
-          if (!err && res) {
+          if (!err && res && res.online) {
             let userData = {
               id: res.id,
               pubKey: res.pubKey
             }
             userList.push(userData);
             socket.emit('msgInit', {type: 'success', visible: 'private', userList});
+          }
+          else if (!err && res && !res.online) {
+            socket.emit('msgInit', {type: 'userNotOnline', visible: 'private'});
           }
           else if (!err && !res) {
             socket.emit('msgInit', {type: 'notFound', visible: 'private'})
@@ -530,14 +527,36 @@ io.on('connection', socket => {
         }
       });
     });
+    User.updateOne({name: socket.username}, {online: false}, (err) => {
+      if (err) {
+        sl.log(err);
+      }
+    });
   });
 });
+
+//
+// Functions
+//
 
 function defaultPrompt() {
   sl.prompt('', res => {
     defaultPrompt();
   });
 };
+
+function createToken(data, socket) {
+  jwt.sign({name: data.name}, privateKey, {algorithm: 'RS256', expiresIn: '1d', jwtid: socket.id}, (err, token) => {
+    if (!err) {
+      socket.username = data.name; //Save username so user can be removed from rooms on disconnect and checked for room ownership
+      socket.emit('login', {type: 'success', name: data.name, token: token});
+    }
+    else {
+      socket.emit('login', {type: 'error', err});
+      sl.log(err);
+    }
+  });
+}
 
 function verifyToken(data, id, callback) {
   jwt.verify(data.token, publicKey, {jwtid: id, algorithms: 'RS256'}, (err, decoded) => {

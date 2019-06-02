@@ -2,23 +2,20 @@ const sl = require('staylow');
 const io = require('socket.io-client');
 const crypto = require('crypto');
 
-const socket = io.connect('http://localhost:4000', {reconnectionAttempts: 3});
+const socket = io('http://localhost:4000', {reconnectionAttempts: 3});
+
 sl.options({
   defaultPrompt: '',
   globalMask: '*',
   logOnEnter: 'false'
 });
+
 let session = {
   activeRoom: '',
   connected: false,
   log: {},
   user: {}
 }
-let jwtToken;
-let privateKey;
-let name;
-let user = {};
-let rooms = {};
 
 //
 //SOCKET EVENTS
@@ -40,6 +37,10 @@ socket.on('login', data => {
     session.user.id = socket.id;
     sl.log('Login successful');
     home();
+  }
+  else if (data.type === 'alreadyOnline') {
+    sl.log('User already logged in.');
+    login();
   }
   else if (data.type === 'failed') {
     sl.log('Username or password incorrect.');
@@ -78,39 +79,7 @@ socket.on('register', data => {
 //On getSalt
 socket.on('getSalt', data => {
   if (data.type === 'success') {
-    sl.prompt('Enter password: ', true, res => {
-      //Hash password before sending to server
-      crypto.pbkdf2(res, data.salt, 100000, 128, 'sha512', (err, derivedKey) => {
-        if (!err) {
-          //Generate RSA key pair
-          crypto.generateKeyPair('rsa', {
-            modulusLength: 2048,
-            publicKeyEncoding: {
-              type: 'spki',
-              format: 'pem'
-            },
-            privateKeyEncoding: {
-              type: 'pkcs8',
-              format: 'pem'
-            }
-          }, (err, publicKey, privateKey) => {
-            if (!err) {
-              session.privateKey = privateKey;
-              session.user.pubKey = publicKey;
-              socket.emit('login', {name: data.name, pw: derivedKey.toString('base64'), pubKey: publicKey});
-            }
-            else {
-              sl.log('Error: ' + err.message);
-              login();
-            }
-          });
-        }
-        else {
-          sl.log('Error: ' + err.message);
-          login();
-        }
-      });
-    });
+    hashLoginPassword(data);
   }
   else if (data.type === 'error') {
     sl.log('Error: ' + data.err.message);
@@ -161,18 +130,7 @@ socket.on('join', data => {
     room();
   }
   else if (data.type === 'private') {
-    sl.prompt('Enter password: ', true, res => {
-      let salt = data.salt;
-      crypto.pbkdf2(res, salt, 100000, 128, 'sha512', (err, derivedKey) => {
-        if (!err) {
-          socket.emit('joinPrivate', {room: data.room, user: session.user, private: true, pw: derivedKey.toString('base64'), token: session.token});
-        }
-        else {
-          sl.log('Error: ' + err);
-          session.home ? home() : room();
-        }
-      });
-    });
+    hashRoomPassword(data);
   }
   else if (data.type === 'alreadyJoined') {
     sl.log('Room already joined, please use :switch to switch between rooms.');
@@ -284,7 +242,10 @@ socket.on('msgInit', data => {
     });
   }
   else if (data.type === 'notFound' && data.visible === 'private') {
-    sl.log('User not found');
+    sl.log('User not found.');
+  }
+  else if (data.type === 'userNotOnline' && data.visible === 'private') {
+    sl.log('User not online.');
   }
   else if (data.type === 'error') {
     sl.log('Error: ' + err.message)
@@ -424,22 +385,10 @@ function register() {
   sl.log('REGISTER');
   sl.prompt('Enter username: ', res => {
     let regex = /^\w+$/;
-    let username = res;
+    let name = res;
 
-    if(regex.test(username) && username.length >= 3) {
-      sl.prompt('Enter password: ', true, res => {
-        //Hash password before sending to server
-        let salt = crypto.randomBytes(128).toString('base64');
-        crypto.pbkdf2(res, salt, 100000, 128, 'sha512', (err, derivedKey) => {
-          if (!err) {
-            socket.emit('register', {name: username, pw: derivedKey.toString('base64'), salt});
-          }
-          else {
-            sl.log('Error: ' + err);
-            register();
-          }
-        });
-      });
+    if(regex.test(name) && name.length >= 3) {
+      hashRegisterPassword(name);
     }
     else {
       clear();
@@ -462,42 +411,7 @@ function home() {
       socket.emit('join', {room, user: session.user, token: session.token});
     }
     else if (res.startsWith(':create ')) {
-      let room = res.slice(8);
-      let regex = /^\w+$/;
-
-      if (regex.test(room) && room.length >= 3) {
-        sl.prompt('Do you want to make the room private? y/n', res => {
-          if (res === 'n') {
-            socket.emit('create', {room, user: session.user, private: false, token: session.token});
-            home();
-          }
-          else if (res === 'y') {
-            sl.prompt('Enter room password: ', true, res => {
-              //Hash password before sending to server
-              let salt = crypto.randomBytes(128).toString('base64');
-              crypto.pbkdf2(res, salt, 100000, 128, 'sha512', (err, derivedKey) => {
-                if (!err) {
-                  socket.emit('create', {room, user: session.user, private: true, pw: derivedKey.toString('base64'), salt, token: session.token});
-                  home();
-                }
-                else {
-                  sl.log('Error: ' + err);
-                  home();
-                }
-              });
-            });
-          }
-          else {
-            sl.log('Command not recognized.');
-            home();
-          }
-        });
-        
-      }
-      else {
-        sl.log('Room name can only contain letters, numbers and underscores and needs to be atleast 3 characters long.');
-        home();
-      }
+      createRoom(res);
     }
     else if (res.startsWith(':p ')) {
       let array = res.split(' ');
@@ -595,6 +509,120 @@ function drawLog(room) {
   session.log[room].forEach(msg => {
     sl.log(msg);
   });
+}
+
+//Hash password
+function hashLoginPassword(data) {
+  sl.prompt('Enter password: ', true, res => {
+    //Hash password before sending to server
+    crypto.pbkdf2(res, data.salt, 100000, 128, 'sha512', (err, derivedKey) => {
+      if (!err) {
+        generateRSAKeyPair(data, derivedKey);
+      }
+      else {
+        sl.log('Error: ' + err.message);
+        login();
+      }
+    });
+  });
+}
+
+//Hash register password
+function hashRegisterPassword(name) {
+  sl.prompt('Enter password: ', true, res => {
+    //Hash password before sending to server
+    let salt = crypto.randomBytes(128).toString('base64');
+    crypto.pbkdf2(res, salt, 100000, 128, 'sha512', (err, derivedKey) => {
+      if (!err) {
+        socket.emit('register', {name, pw: derivedKey.toString('base64'), salt});
+      }
+      else {
+        sl.log('Error: ' + err);
+        register();
+      }
+    });
+  });
+}
+
+//Hash room password
+function hashRoomPassword(data) {
+  sl.prompt('Enter password: ', true, res => {
+    let salt = data.salt;
+    crypto.pbkdf2(res, salt, 100000, 128, 'sha512', (err, derivedKey) => {
+      if (!err) {
+        socket.emit('joinPrivate', {room: data.room, user: session.user, private: true, pw: derivedKey.toString('base64'), token: session.token});
+      }
+      else {
+        sl.log('Error: ' + err);
+        session.home ? home() : room();
+      }
+    });
+  });
+}
+
+//Generate RSA key pair
+function generateRSAKeyPair(data, derivedKey) {
+  crypto.generateKeyPair('rsa', {
+    modulusLength: 2048,
+    publicKeyEncoding: {
+      type: 'spki',
+      format: 'pem'
+    },
+    privateKeyEncoding: {
+      type: 'pkcs8',
+      format: 'pem'
+    }
+  }, (err, publicKey, privateKey) => {
+    if (!err) {
+      session.privateKey = privateKey;
+      session.user.pubKey = publicKey;
+      socket.emit('login', {name: data.name, pw: derivedKey.toString('base64'), pubKey: publicKey});
+    }
+    else {
+      sl.log('Error: ' + err.message);
+      login();
+    }
+  });
+}
+
+//Create room
+function createRoom(res) {
+  let room = res.slice(8);
+  let regex = /^\w+$/;
+
+  if (regex.test(room) && room.length >= 3) {
+    sl.prompt('Do you want to make the room private? y/n', res => {
+      if (res === 'n') {
+        socket.emit('create', {room, user: session.user, private: false, token: session.token});
+        home();
+      }
+      else if (res === 'y') {
+        sl.prompt('Enter room password: ', true, res => {
+          //Hash password before sending to server
+          let salt = crypto.randomBytes(128).toString('base64');
+          crypto.pbkdf2(res, salt, 100000, 128, 'sha512', (err, derivedKey) => {
+            if (!err) {
+              socket.emit('create', {room, user: session.user, private: true, pw: derivedKey.toString('base64'), salt, token: session.token});
+              home();
+            }
+            else {
+              sl.log('Error: ' + err);
+              home();
+            }
+          });
+        });
+      }
+      else {
+        sl.log('Command not recognized.');
+        home();
+      }
+    });
+    
+  }
+  else {
+    sl.log('Room name can only contain letters, numbers and underscores and needs to be atleast 3 characters long.');
+    home();
+  }
 }
 
 //Change bash title
