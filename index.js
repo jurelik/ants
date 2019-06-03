@@ -569,6 +569,58 @@ io.on('connection', socket => {
     }) 
   });
 
+  //Change password init event
+  socket.on('changePwInit', data => {
+    verifyToken(data, socket.id, (err, decoded) => {
+      if (!err) {
+        User.findOne({name: decoded.name}, (err, res) => {
+          if (!err && res) {
+            socket.emit('changePwInit', {type: 'success', salt: res.salt});
+          }
+          else {
+            socket.emit('error', {type: 'error'});
+          }
+        });
+      }
+      else {
+        socket.emit('tokenNotValid');
+      }
+    });
+  });
+
+  //Change password event
+  socket.on('changePw', data => {
+    verifyToken(data, socket.id, (err, decoded) => {
+      if (!err) {
+        User.findOne({name: decoded.name}, (err, user) => {
+          if (!err && user) {
+            if (data.oldPw === user.pw) {
+              user.pw = data.newPw;
+              user.salt = data.salt;
+              user.save(err => {
+                if (!err) {
+                  socket.emit('changePw', {type: 'success'});
+                }
+                else {
+                  socket.emit('changePw', {type: 'error'});
+                }
+              });
+            }
+            else {
+              socket.emit('changePw', {type: 'wrongPassword'});
+            }
+          }
+          else {
+            socket.emit('changePw', {type: 'error'});
+          }
+        });
+      }
+      else {
+        socket.emit('tokenNotValid');
+      }
+    });
+  });
+
   //Disconnect event
   socket.on('disconnect', data => {
     socket.allRooms.forEach(room => {

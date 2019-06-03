@@ -390,6 +390,74 @@ socket.on('roomDeleted', data => {
   }
 });
 
+//On changePwInit
+socket.on('changePwInit', data => {
+  if (data.type === 'success') {
+    sl.prompt('Please enter your old password: ', true, res => {
+      let pw1 = res;
+      sl.prompt('Confirm old password: ', true, res => {
+        if (pw1 === res) {
+          crypto.pbkdf2(res, data.salt, 100000, 128, 'sha512', (err, derivedKey) => {
+            if (!err) {
+              let oldPw = derivedKey.toString('base64');
+              sl.prompt('Enter new password: ', true, res => {
+                //Hash password before sending to server
+                let salt = crypto.randomBytes(128).toString('base64');
+                crypto.pbkdf2(res, salt, 100000, 128, 'sha512', (err, derivedKey) => {
+                  if (!err) {
+                    let newPw = derivedKey.toString('base64');
+                    socket.emit('changePw', {oldPw, newPw, salt, token: session.token});
+                  }
+                  else {
+                    sl.log('Error: ' + err);
+                    home();
+                  }
+                });
+              });
+            }
+            else {
+              sl.log('Error: ' + err.message);
+              home();
+            }
+          });
+        }
+        else {
+          sl.log("The passwords you entered didn't match.");
+          home();
+        }
+      });
+    });
+  }
+  else if (data.type === 'error') {
+    sl.log('Something went wrong, please try again.');
+    home();
+  }
+  else {
+    sl.log('Error: Unknown');
+    home();
+  }
+});
+
+//On changePw
+socket.on('changePw', data => {
+  if (data.type === 'success') {
+    sl.log('Password successfully changed.');
+    home();
+  }
+  else if (data.type === 'wrongPassword') {
+    sl.log('The password you entered was not correct. Please try again.');
+    home();
+  }
+  else if (data.type === 'error') {
+    sl.log('Something went wrong.');
+    home();
+  }
+  else {
+    sl.log('Error: Unknown');
+    home();
+  }
+});
+
 //On welcome
 socket.on('welcome', data => {
   if (data.type === 'success') {
@@ -503,6 +571,9 @@ function home() {
       session.to = user;
       socket.emit('msgInit', {dest: user, visible: 'private', token: session.token})
       home();
+    }
+    else if (res === ':changepw') {
+      socket.emit('changePwInit', {token: session.token});
     }
     else {
       sl.log('Command not found')
