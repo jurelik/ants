@@ -629,15 +629,16 @@ io.on('connection', socket => {
           for (x = 0; x < res.users.length; x++) {
             if (res.users[x].name === socket.username) {
               res.users.splice(x, 1);
+              x--;
               res.save(err => {
                 if (err) {
                   sl.log(err);
                 }
               });
-              x--;
             }
             else {
-              const msg = crypto.publicEncrypt(res.users[x].pubKey, Buffer.from(`${socket.username} left the room.`))
+              const msg = crypto.publicEncrypt(res.users[x].pubKey, Buffer.from(`${socket.username} left the room.`));
+              socket.to(res.users[x].id).emit('msg', {type: 'userLeft', msg, room});
             }
           }
         }

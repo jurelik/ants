@@ -291,6 +291,7 @@ socket.on('msg', data => {
     }
   }
   else if (data.type === 'userLeft') {
+    sl.log('lel');
     if (session.activeRoom === data.room) {
       const msg = crypto.privateDecrypt(session.privateKey, data.msg);
       sl.log(msg.toString());
