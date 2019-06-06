@@ -126,7 +126,9 @@ socket.on('join', data => {
     sl.log(`Room successfully joined: ${data.room}`);
     sl.log(data.welcome);
     session.activeRoom = data.room;
-    session.log[data.room] = [];
+    session.log[data.room] = {};
+    session.log[data.room].msg = [];
+    session.log[data.room].unread = 0;
     room();
   }
   else if (data.type === 'private') {
@@ -200,6 +202,7 @@ socket.on('switch', data => {
   if (data.type === 'success') {
     drawLog(data.room);
     session.activeRoom = data.room;
+    session.log[data.room].unread = 0;
     room();
   }
   else if (data.type === 'failed') {
@@ -261,11 +264,11 @@ socket.on('msg', data => {
     if(session.activeRoom === data.room) {
       const msg = crypto.privateDecrypt(session.privateKey, data.msg);
       sl.log(`${data.from}: ${msg.toString()}`);
-      addToLog(data.room, `${data.from}: ${msg.toString()}`);
+      addToLog(data.room, `${data.from}: ${msg.toString()}`, true);
     }
     else {
       const msg = crypto.privateDecrypt(session.privateKey, data.msg);
-      addToLog(data.room, `${data.from}: ${msg.toString()}`);
+      addToLog(data.room, `${data.from}: ${msg.toString()}`, false);
     }
   }
   else if (data.type === 'success' && data.visible === 'private') {
@@ -283,11 +286,11 @@ socket.on('msg', data => {
     if (session.activeRoom === data.room) {
       const msg = crypto.privateDecrypt(session.privateKey, data.msg);
       sl.log(msg.toString());
-      addToLog(data.room, msg.toString());
+      addToLog(data.room, msg.toString(), true);
     }
     else {
       const msg = crypto.privateDecrypt(session.privateKey, data.msg);
-      addToLog(data.room, msg.toString());
+      addToLog(data.room, msg.toString(), false);
     }
   }
   else if (data.type === 'userLeft') {
@@ -295,11 +298,11 @@ socket.on('msg', data => {
     if (session.activeRoom === data.room) {
       const msg = crypto.privateDecrypt(session.privateKey, data.msg);
       sl.log(msg.toString());
-      addToLog(data.room, msg.toString());
+      addToLog(data.room, msg.toString(), true);
     }
     else {
       const msg = crypto.privateDecrypt(session.privateKey, data.msg);
-      addToLog(data.room, msg.toString());
+      addToLog(data.room, msg.toString(), false);
     }
   }
   else if (data.type === 'failed') {
@@ -682,7 +685,7 @@ function room() {
       else if (res.startsWith(':log ')) {
         let user = res.slice(5);
         if (session.log[user]) {
-          session.log[user].forEach(msg => {
+          session.log[user].msg.forEach(msg => {
             sl.log(msg);
           });
           room();
@@ -698,6 +701,12 @@ function room() {
       }
       else if (res === ':home') {
         home();
+      }
+      else if (res === ':check' || res === ':c') {
+        Object.keys(session.log).forEach(room => {
+          sl.log(`- ${room} (${session.log[room].unread} unread messages)`);
+        });
+        room();
       }
       else if (res.startsWith(':welcome ')) {
         let msg = res.slice(9);
@@ -721,20 +730,25 @@ function room() {
 };
 
 //Add message to log
-function addToLog(room, msg) {
-  if (session.log[room]) {
-    session.log[room].push(msg);
+function addToLog(room, msg, active) {
+  if (session.log[room] && active) {
+    session.log[room].msg.push(msg);
+  }
+  else if (session.log[room] && !active) {
+    session.log[room].msg.push(msg);
+    session.log[room].unread++;
   }
   else {
     session.log[room] = [];
-    session.log[room].push(msg);
+    session.log[room].msg.push(msg);
+    session.log[room].unread = 0;
   }
 }
 
 //Draw log
 function drawLog(room) {
   clear();
-  session.log[room].forEach(msg => {
+  session.log[room].msg.forEach(msg => {
     sl.log(msg);
   });
 }
