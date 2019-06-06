@@ -459,6 +459,60 @@ socket.on('changePw', data => {
   }
 });
 
+//On selfdestructInit
+socket.on('selfdestructInit', data => {
+  if (data.type === 'success') {
+    sl.prompt('Enter password: ', true, res => {
+      const pw1 = res;
+      sl.prompt('Confirm password: ', true, res => {
+        if (pw1 === res) {
+          crypto.pbkdf2(res, data.salt, 100000, 128, 'sha512', (err, derivedKey) => {
+            if (!err) {
+              socket.emit('selfdestruct', {pw: derivedKey.toString('base64'), token: session.token});
+            }
+            else {
+              sl.log('Error: ' + err.message);
+              home();
+            }
+          });
+        }
+        else {
+          sl.log('Passwords did not match. Aborting selfdestruct.');
+          home();
+        }
+      });
+    });
+  }
+  else if (data.type === 'error') {
+    sl.log('Something went wrong.');
+    home();
+  }
+  else {
+    sl.log('Error: Unknown');
+    home();
+  }
+});
+
+//On selfdestruct
+socket.on('selfdestruct', data => {
+  if (data.type === 'success') {
+    sl.log('Account successfully deleted.');
+    process.exit();
+  }
+  else if (data.type === 'wrongPassword') {
+    sl.log('The password you entered was wrong. Aborting selfdestruct.');
+    home();
+  }
+  else if (data.type === 'error') {
+    sl.log('Something went wrong.');
+    home();
+  }
+  else {
+    sl.log('Error: Unknown');
+    home();
+  }
+});
+
 //On welcome
 socket.on('welcome', data => {
   if (data.type === 'success') {
@@ -575,6 +629,21 @@ function home() {
     }
     else if (res === ':changepw') {
       socket.emit('changePwInit', {token: session.token});
+    }
+    else if (res === ':selfdestruct') {
+      sl.prompt('This will permanently delete your account. Are you sure you want to proceed (y/n): ', res => {
+        if (res === 'y') {
+          socket.emit('selfdestructInit', {token: session.token});
+        }
+        else if ('n') {
+          sl.log('Aborting selfdestruct.');
+          home();
+        }
+        else {
+          sl.log('Command not recognized. Aborting selfdestruct.');
+          home();
+        }
+      });
     }
     else {
       sl.log('Command not found')

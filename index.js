@@ -621,6 +621,55 @@ io.on('connection', socket => {
     });
   });
 
+  //Selfdestruct init event
+  socket.on('selfdestructInit', data => {
+    verifyToken(data, socket.id, (err, decoded) => {
+      if (!err) {
+        User.findOne({name: decoded.name}, (err, user) => {
+          if (!err) {
+            socket.emit('selfdestructInit', {type: 'success', salt: user.salt});
+          }
+          else {
+            socket.emit('selfdestructInit', {type: 'error'});
+          }
+        });
+      }
+      else {
+        socket.emit('tokenNotValid');
+      }
+    });
+  })
+
+  //Selfdestruct event
+  socket.on('selfdestruct', data => {
+    verifyToken(data, socket.id, (err, decoded) => {
+      if (!err) {
+        User.findOne({name: decoded.name}, (err, user) => {
+          if (!err) {
+            if (user.pw === data.pw) {
+              user.remove(err => {
+                if (!err) {
+                  socket.emit('selfdestruct', {type: 'success'});
+                  socket.disconnect(true);
+                }
+                socket.emit('selfdestruct', {type: 'error'});
+              });
+            }
+            else {
+              socket.emit('selfdestruct', {type: 'wrongPassword'});
+            }
+          }
+          else {
+            socket.emit('selfdestruct', {type: 'error'});
+          }
+        });
+      }
+      else {
+        socket.emit('tokenNotValid');
+      }
+    });
+  });
+
   //Disconnect event
   socket.on('disconnect', data => {
     socket.allRooms.forEach(room => {
