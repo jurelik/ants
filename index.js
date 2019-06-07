@@ -705,7 +705,28 @@ io.on('connection', socket => {
 
 function defaultPrompt() {
   sl.prompt('', res => {
-    defaultPrompt();
+    if (res === ':q') {
+      sl.log('Shutting down...');
+      Room.updateMany({}, {users: []}, (err, raw) => {
+        if (!err) {
+          User.updateMany({}, {online: false}, (err, raw) => {
+            if (!err) {
+              sl.log('Server shut down successfully.');
+              process.exit();
+            }
+            else {
+              sl.log('Error: ' + err.message);
+            }
+          });
+        }
+        else {
+          sl.log('Error: ' + err.message);
+        }
+      });
+    }
+    else {
+      defaultPrompt();
+    }
   });
 };
 
