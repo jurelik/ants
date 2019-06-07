@@ -121,8 +121,7 @@ io.on('connection', socket => {
         socket.emit('getSalt', {type: 'success', name: data.name, salt: res.salt});
       }
       else if (!err && !res) {
-        let salt = crypto.randomBytes(128).toString('base64');
-        socket.emit('getSalt', {type: 'success', name: data.name, salt})
+        socket.emit('getSalt', {type: 'success', name: data.name, salt: 'oops'})
       }
       else {
         socket.emit('getSalt', {type: 'error', err});
@@ -196,8 +195,7 @@ io.on('connection', socket => {
               socket.activeRoom = data.room; //Change activeRoom
               socket.allRooms.push(data.room); //Add to list of all the rooms this socket has joined so far
               res.users.forEach(user => {
-                const msg = crypto.publicEncrypt(user.pubKey, Buffer.from(`${socket.username} joined the room.`));
-                socket.to(user.id).emit('msg', {type: 'userJoined', msg, room: socket.activeRoom});
+                socket.to(user.id).emit('msg', {type: 'userJoined', msg: `${decoded.name} joined the room.`, room: socket.activeRoom});
               });
               res.users.push(data.user);
               res.save(err => {
@@ -240,8 +238,7 @@ io.on('connection', socket => {
               socket.activeRoom = data.room; //Change activeRoom
               socket.allRooms.push(data.room); //Add to list of all the rooms this socket has joined so far
               res.users.forEach(user => {
-                const msg = crypto.publicEncrypt(user.pubKey, Buffer.from(`${socket.username} joined the room.`));
-                socket.to(user.id).emit('msg', {type: 'userJoined', msg, room: socket.activeRoom});
+                socket.to(user.id).emit('msg', {type: 'userJoined', msg: `${decoded.name} joined the room.`, room: socket.activeRoom});
               });
               res.users.push(data.user);
               res.save(err => {
@@ -275,7 +272,7 @@ io.on('connection', socket => {
         Room.findOne({name: data.room}, (err, res) => {
           if (!err && res) {
             for (x = 0; x < res.users.length; x++) {
-              if (res.users[x].name === socket.username) {
+              if (res.users[x].name === decoded.name) {
                 res.users.splice(x, 1); // Remove user from room
                 socket.allRooms.splice(socket.allRooms.indexOf(data.room), 1); //Remove room from list of rooms socket is connected to
                 res.save(err => {
@@ -289,8 +286,7 @@ io.on('connection', socket => {
                 x--;
               }
               else {
-                const msg = crypto.publicEncrypt(res.users[x].pubKey, Buffer.from(`${socket.username} left the room.`))
-                socket.to(res.users[x].id).emit('msg', {type: 'userLeft', msg, room: res.name});
+                socket.to(res.users[x].id).emit('msg', {type: 'userLeft', msg: `${decoded.name} left the room.`, room: res.name});
               }
             }
           }
@@ -474,7 +470,7 @@ io.on('connection', socket => {
       if (!err) {
         Room.findOne({name: socket.activeRoom}, (err, res) => {
           if (!err && res) {
-            if (res.owner === socket.username) {
+            if (res.owner === decoded.name) {
               res.welcome = data.msg;
               res.save(err => {
                 if (!err) {
@@ -686,8 +682,7 @@ io.on('connection', socket => {
               });
             }
             else {
-              const msg = crypto.publicEncrypt(res.users[x].pubKey, Buffer.from(`${socket.username} left the room.`));
-              socket.to(res.users[x].id).emit('msg', {type: 'userLeft', msg, room});
+              socket.to(res.users[x].id).emit('msg', {type: 'userLeft', msg: `${socket.username} left the room.`, room});
             }
           }
         }
@@ -717,7 +712,7 @@ function defaultPrompt() {
 function createToken(data, socket) {
   jwt.sign({name: data.name}, privateKey, {algorithm: 'RS256', expiresIn: '1d', jwtid: socket.id}, (err, token) => {
     if (!err) {
-      socket.username = data.name; //Save username so user can be removed from rooms on disconnect and checked for room ownership
+      socket.username = data.name; //Save username so user can be removed from rooms on disconnect
       socket.emit('login', {type: 'success', name: data.name, token: token});
     }
     else {
