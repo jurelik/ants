@@ -36,6 +36,8 @@ socket.on('login', data => {
     session.user.name = data.name;
     session.user.id = socket.id;
     sl.log('Login successful');
+    clear();
+    drawLog('home');
     home();
   }
   else if (data.type === 'alreadyOnline') {
@@ -112,7 +114,7 @@ socket.on('lsUsers', data => {
     sl.log(data.userList);
   }
   else if (data.type === 'error') {
-    sl.log('Error: ' + data.err);
+    sl.log('Error: ' + data.err.message);
   }
   else {
     sl.log('Error: Unknown');
@@ -251,7 +253,7 @@ socket.on('msgInit', data => {
     sl.log('User not online.');
   }
   else if (data.type === 'error') {
-    sl.log('Error: ' + data.err)
+    sl.log('Error: ' + data.err.message)
   }
   else {
     sl.log('Error: Unknown');
@@ -301,7 +303,7 @@ socket.on('msg', data => {
     }
   }
   else if (data.type === 'failed') {
-    sl.log('Error: ' + err.message);
+    sl.log('Error: ' + data.err.message);
   }
   else {
     sl.log('Error: Unknown');
@@ -542,7 +544,9 @@ function login() {
   setTitle('ants');
   if (session.connected === false) {
     clear();
-    sl.log(``);
+    session.log.home = {};
+    session.log.home.msg = [];
+    session.log.home.unread = 0;
     sl.log(`
   
 
@@ -551,8 +555,26 @@ function login() {
     _,-'\\   /|   .    .    /\`.
 _,-'     \\_/_|_  |\\   |\`. /   \`._,--===--.__
 ^       _/"/  " \\ : \\__|_ /.   ,'    :.  :. .\`-._
-      // ^   /7 t'""    "\`-._/ ,'\\   :   :  :  .\`.
-      Y      L/ )\         ]],'   \\  :   :  :   : \`.
+      // ^   /7 t'""    "\`-._/ ,'\\   :   :  :   .\`.
+      Y      L/ )\         ]],'    \\  :   :  :   :  \`.
+      |        /  \`.n_n_n,','\\_    \\ ;   ;  ;   ;  _>
+      |__    ,'     |  \\\`-'    \`-.__\\_______.==---'
+     //  \`""\\\\      |   \\            \\
+     \\|     |/      /    \\            \\
+                   /     |             \`.
+                  /      |               ^
+                 ^       |                         アリ`)
+    sl.log('Welcome to ants. To create a new account please enter /n');
+    addToLog('home', `
+      
+
+  
+             ,
+    _,-'\\   /|   .    .    /\`.
+_,-'     \\_/_|_  |\\   |\`. /   \`._,--===--.__
+^       _/"/  " \\ : \\__|_ /.   ,'    :.  :. .\`-._
+      // ^   /7 t'""    "\`-._/ ,'\\   :   :  :   .\`.
+      Y      L/ )\         ]],'    \\  :   :  :   :  \`.
       |        /  \`.n_n_n,','\\_    \\ ;   ;  ;   ;  _>
       |__    ,'     |  \\\`-'    \`-.__\\_______.==---'
      //  \`""\\\\      |   \\            \\
@@ -560,16 +582,18 @@ _,-'     \\_/_|_  |\\   |\`. /   \`._,--===--.__
                    /     |             \`.
                   /      |               ^
                  ^       |                         アリ
-                 
-                 `)
-    sl.log('Welcome to ants. To create a new account please enter /n');
+Welcome to ants.`, true);
     session.connected = true;
   }
   sl.prompt('Enter username: ', res => {
     if (res.startsWith(':')) {
-      if(res.slice(1) === 'n') {
+      if(res === ':n') {
         clear();
         register();
+      }
+      else if (res === ':q') {
+        sl.log('Shutting down.');
+        process.exit();
       }
       else {
         sl.log('Command not recognized.');
@@ -591,6 +615,10 @@ function register() {
 
     if(regex.test(name) && name.length >= 3) {
       hashRegisterPassword(name);
+    }
+    else if (res === ':q') {
+      sl.log('Shutting down.');
+      process.exit();
     }
     else {
       clear();
@@ -643,6 +671,10 @@ function home() {
         }
       });
     }
+    else if (res === ':q') {
+      sl.log('Shutting down.');
+      process.exit();
+    }
     else {
       sl.log('Command not found')
       home();
@@ -677,6 +709,10 @@ function room() {
       else if (res.startsWith(':leave')) {
         socket.emit('leave', {room: session.activeRoom, token: session.token});
       }
+      else if (res === ':q') {
+        sl.log('Shutting down.');
+        process.exit();
+      }
       else if (res.startsWith(':log ')) {
         let user = res.slice(5);
         if (session.log[user]) {
@@ -695,6 +731,8 @@ function room() {
         room();
       }
       else if (res === ':home') {
+        clear();
+        drawLog('home');
         home();
       }
       else if (res === ':check' || res === ':c') {
