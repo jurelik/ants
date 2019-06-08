@@ -1,6 +1,7 @@
 const sl = require('staylow');
 const io = require('socket.io-client');
 const crypto = require('crypto');
+const chalk = require('chalk');
 
 const socket = io('http://localhost:4000', {reconnectionAttempts: 3});
 
@@ -265,23 +266,23 @@ socket.on('msg', data => {
   if (data.type === 'success' && data.visible === 'public') {
     if(session.activeRoom === data.room) {
       const msg = crypto.privateDecrypt(session.privateKey, data.msg);
-      sl.log(`${data.from}: ${msg.toString()}`);
-      addToLog(data.room, `${data.from}: ${msg.toString()}`, true);
+      sl.log(`${chalk.bold(data.from)}: ${msg.toString()}`);
+      addToLog(data.room, `${chalk.bold(data.from)}: ${msg.toString()}`, true);
     }
     else {
       const msg = crypto.privateDecrypt(session.privateKey, data.msg);
-      addToLog(data.room, `${data.from}: ${msg.toString()}`, false);
+      addToLog(data.room, `${chalk.bold(data.from)}: ${msg.toString()}`, false);
     }
   }
   else if (data.type === 'success' && data.visible === 'private') {
     const msg = crypto.privateDecrypt(session.privateKey, data.msg);
     if (!data.self) {
-      sl.log(`PRIVATE from ${data.from}: ${msg.toString()}`);
-      addToLog(data.from, `PRIVATE from ${data.from}: ${msg.toString()}`);
+      sl.log(`${chalk.bold('PRIVATE')} from ${chalk.bold(data.from)}: ${msg.toString()}`);
+      addToLog(data.from, `${chalk.bold('PRIVATE')} from ${chalk.bold(data.from)}: ${msg.toString()}`, true);
     }
     else {
-      sl.log(`PRIVATE to ${data.to}: ${msg.toString()}`);
-      addToLog(data.to, `PRIVATE to ${data.to}: ${msg.toString()}`);
+      sl.log(`${chalk.bold('PRIVATE')} to ${chalk.bold(data.to)}: ${msg.toString()}`);
+      addToLog(data.to, `${chalk.bold('PRIVATE')} to ${chalk.bold(data.to)}: ${msg.toString()}`, true);
     }
   }
   else if (data.type === 'userJoined') {
@@ -543,7 +544,9 @@ socket.on('tokenNotValid', () => {
 function login() {
   setTitle('ants');
   if (session.connected === false) {
-    clear();
+    for (x = 0; x < process.stdout.rows - 18; x++) {
+      sl.log('');
+    }
     session.log.home = {};
     session.log.home.msg = [];
     session.log.home.unread = 0;
@@ -564,7 +567,7 @@ _,-'     \\_/_|_  |\\   |\`. /   \`._,--===--.__
                    /     |             \`.
                   /      |               ^
                  ^       |                         アリ`)
-    sl.log('Welcome to ants. To create a new account please enter /n');
+    sl.log('Welcome to ants. To create a new account please enter :n');
     addToLog('home', `
       
 
@@ -583,7 +586,7 @@ _,-'     \\_/_|_  |\\   |\`. /   \`._,--===--.__
                   /      |               ^
                  ^       |                         アリ
 Welcome to ants.`, true);
-    session.connected = true;
+    session.connected = true
   }
   sl.prompt('Enter username: ', res => {
     if (res.startsWith(':')) {
@@ -591,7 +594,7 @@ Welcome to ants.`, true);
         clear();
         register();
       }
-      else if (res === ':q') {
+      else if (res === ':q' || res === 'Q') {
         sl.log('Shutting down.');
         process.exit();
       }
@@ -608,6 +611,23 @@ Welcome to ants.`, true);
 
 //Register
 function register() {
+  sl.log(`
+  
+
+  
+             ,
+    _,-'\\   /|   .    .    /\`.
+_,-'     \\_/_|_  |\\   |\`. /   \`._,--===--.__
+^       _/"/  " \\ : \\__|_ /.   ,'    :.  :. .\`-._
+      // ^   /7 t'""    "\`-._/ ,'\\   :   :  :   .\`.
+      Y      L/ )\         ]],'    \\  :   :  :   :  \`.
+      |        /  \`.n_n_n,','\\_    \\ ;   ;  ;   ;  _>
+      |__    ,'     |  \\\`-'    \`-.__\\_______.==---'
+     //  \`""\\\\      |   \\            \\
+     \\|     |/      /    \\            \\
+                   /     |             \`.
+                  /      |               ^
+                 ^       |                         アリ`)
   sl.log('REGISTER');
   sl.prompt('Enter username: ', res => {
     let regex = /^\w+$/;
@@ -616,7 +636,7 @@ function register() {
     if(regex.test(name) && name.length >= 3) {
       hashRegisterPassword(name);
     }
-    else if (res === ':q') {
+    else if (res === ':q' || res === 'Q') {
       sl.log('Shutting down.');
       process.exit();
     }
@@ -653,6 +673,14 @@ function home() {
       socket.emit('msgInit', {dest: user, visible: 'private', token: session.token})
       home();
     }
+    else if (res === ':check' || res === ':c') {
+      Object.keys(session.log).forEach(room => {
+        if (room != 'home') {
+          sl.log(`- ${room} (${session.log[room].unread} unread messages)`);
+        }
+      });
+      home();
+    }
     else if (res === ':changepw') {
       socket.emit('changePwInit', {token: session.token});
     }
@@ -671,7 +699,7 @@ function home() {
         }
       });
     }
-    else if (res === ':q') {
+    else if (res === ':q' || res === 'Q') {
       sl.log('Shutting down.');
       process.exit();
     }
@@ -709,7 +737,7 @@ function room() {
       else if (res.startsWith(':leave')) {
         socket.emit('leave', {room: session.activeRoom, token: session.token});
       }
-      else if (res === ':q') {
+      else if (res === ':q' || res === 'Q') {
         sl.log('Shutting down.');
         process.exit();
       }
@@ -737,7 +765,9 @@ function room() {
       }
       else if (res === ':check' || res === ':c') {
         Object.keys(session.log).forEach(room => {
-          sl.log(`- ${room} (${session.log[room].unread} unread messages)`);
+          if (room != 'home') {
+            sl.log(`- ${room} (${session.log[room].unread} unread messages)`);
+          }
         });
         room();
       }
@@ -771,8 +801,9 @@ function addToLog(room, msg, active) {
     session.log[room].msg.push(msg);
     session.log[room].unread++;
   }
-  else {
+  else { //if private
     session.log[room] = [];
+    session.log[room].msg = [];
     session.log[room].msg.push(msg);
     session.log[room].unread = 0;
   }
