@@ -668,34 +668,35 @@ io.on('connection', socket => {
 
   //Disconnect event
   socket.on('disconnect', data => {
-    socket.allRooms.forEach(room => {
-      Room.findOne({name: room}, (err, res) => {
-        if (!err && res) {
-          for (x = 0; x < res.users.length; x++) {
-            if (res.users[x].name === socket.username) {
-              res.users.splice(x, 1);
-              x--;
-              res.save(err => {
-                if (err) {
-                  sl.log(err);
-                }
-              });
-            }
-            else {
-              socket.to(res.users[x].id).emit('msg', {type: 'userLeft', msg: `${socket.username} left the room.`, room});
-            }
-          }
-        }
-        else {
-          sl.log('Joined room not found after disconnect.');
-        }
-      });
-    });
-    User.updateOne({name: socket.username}, {online: false}, (err) => {
-      if (err) {
-        sl.log(err);
-      }
-    });
+    disconnect(socket);
+    // socket.allRooms.forEach(room => {
+    //   Room.findOne({name: room}, (err, res) => {
+    //     if (!err && res) {
+    //       for (x = 0; x < res.users.length; x++) {
+    //         if (res.users[x].name === socket.username) {
+    //           res.users.splice(x, 1);
+    //           x--;
+    //           res.save(err => {
+    //             if (err) {
+    //               sl.log(err);
+    //             }
+    //           });
+    //         }
+    //         else {
+    //           socket.to(res.users[x].id).emit('msg', {type: 'userLeft', msg: `${socket.username} left the room.`, room});
+    //         }
+    //       }
+    //     }
+    //     else {
+    //       sl.log('Joined room not found after disconnect.');
+    //     }
+    //   });
+    // });
+    // User.updateOne({name: socket.username}, {online: false}, (err) => {
+    //   if (err) {
+    //     sl.log(err);
+    //   }
+    // });
   });
 });
 
@@ -746,5 +747,39 @@ function createToken(data, socket) {
 function verifyToken(data, id, callback) {
   jwt.verify(data.token, publicKey, {jwtid: id, algorithms: 'RS256'}, (err, decoded) => {
     callback(err, decoded);
+  });
+}
+
+function disconnect(socket) {
+  socket.allRooms.forEach(room => {
+    Room.findOne({name: room}, (err, res) => {
+      if (!err && res) {
+        for (x = 0; x < res.users.length; x++) {
+          if (res.users[x].name === socket.username) {
+            res.users.splice(x, 1);
+            x--;
+            res.save(err => {
+              if (err && err.message.startsWith('No matching document found for id')) {
+                disconnect(socket);
+              }
+              else if (err && !err.message.startsWith('No matching document found for id')) {
+                sl.log(err.message);
+              }
+            });
+          }
+          else {
+            socket.to(res.users[x].id).emit('msg', {type: 'userLeft', msg: `${socket.username} left the room.`, room});
+          }
+        }
+      }
+      else {
+        sl.log('Joined room not found after disconnect.');
+      }
+    });
+  });
+  User.updateOne({name: socket.username}, {online: false}, (err) => {
+    if (err) {
+      sl.log(err);
+    }
   });
 }
