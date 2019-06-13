@@ -34,8 +34,16 @@ Saving history:
 //To save manually, use the following:
 sl.addToHistory('String you want to save');
 ```
+
 ## Log
 Always use the staylow log method instead of console.log to output to terminal. This insures that any active user prompts won't be interrupted.
 ```
 sl.log('Hello world');
+```
+
+## Pause / Resume
+You can manually pause or resume input using the following commands.
+```
+sl.pause(); //Pause
+sl.resume(); //Resume
 ```

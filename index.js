@@ -6,7 +6,6 @@ const User = require('./models/users');
 const Room = require('./models/rooms');
 const fs = require('fs');
 const jwt = require('jsonwebtoken');
-const crypto = require('crypto');
 
 //Init socket.io and a http server
 const io = socketio.listen(4000);
@@ -18,6 +17,7 @@ const publicKey = fs.readFileSync('./public.key', 'utf8');
 sl.options({
   defaultPrompt: '',
 });
+let welcomeMsg = 'Welcome to ants.';
 
 //Connect to MongoDB
 function serverInit() {
@@ -88,7 +88,7 @@ io.on('connection', socket => {
   //Register event
   socket.on('register', data => {
     let regex = /^\w+$/;
-    if (regex.test(data.name) && data.name.length >= 3) {
+    if (regex.test(data.name) && data.name.length >= 3 && data.name.length <= 15) {
       let user = new User({name: data.name, pw: data.pw, salt: data.salt, id: socket.id, pubKey: {}});
       User.findOne({name: user.name}, (err, docs) => { //Check if user exists already
         if (!docs && !err) {
@@ -207,8 +207,11 @@ io.on('connection', socket => {
                 }
               });
             }
-            else if (!err && res && res.private) {
-              socket.emit('join', {type: 'private', room: data.room, salt: res.salt});
+            else if (!err && res && res.private && res.pw) {
+              socket.emit('join', {type: 'private', room: data.room, pw: true, salt: res.salt});
+            }
+            else if (!err && res && res.private && !res.pw) {
+              socket.emit('join', {type: 'private', room: data.room, pw: false});
             }
             else if (!err && !res) {
               socket.emit('join', {type: 'notFound'})
@@ -234,7 +237,7 @@ io.on('connection', socket => {
       if (!err) {
         Room.findOne({name: data.room}, (err, res) => {
           if (!err && res) {
-            if (data.pw === res.pw) {
+            if (data.pw === res.pw || !res.pw) {
               socket.activeRoom = data.room; //Change activeRoom
               socket.allRooms.push(data.room); //Add to list of all the rooms this socket has joined so far
               res.users.forEach(user => {
@@ -332,7 +335,13 @@ io.on('connection', socket => {
             });
           }
           else {
-            let room = new Room({name: data.room, owner: data.user.name, private: true, pw: data.pw, salt: data.salt, welcome: `Welcome to ${data.room}!`});
+            let room;
+            if (data.pw) {
+              room = new Room({name: data.room, owner: data.user.name, private: true, pw: data.pw, salt: data.salt, welcome: `Welcome to ${data.room}!`});
+            }
+            else {
+              room = new Room({name: data.room, owner: data.user.name, private: true, salt: data.salt, welcome: `Welcome to ${data.room}!`});
+            }
             Room.findOne({name: data.room}, (err, res) => {
               if (!err && !res) {
                 room.save(err => {
@@ -669,34 +678,6 @@ io.on('connection', socket => {
   //Disconnect event
   socket.on('disconnect', data => {
     disconnect(socket);
-    // socket.allRooms.forEach(room => {
-    //   Room.findOne({name: room}, (err, res) => {
-    //     if (!err && res) {
-    //       for (x = 0; x < res.users.length; x++) {
-    //         if (res.users[x].name === socket.username) {
-    //           res.users.splice(x, 1);
-    //           x--;
-    //           res.save(err => {
-    //             if (err) {
-    //               sl.log(err);
-    //             }
-    //           });
-    //         }
-    //         else {
-    //           socket.to(res.users[x].id).emit('msg', {type: 'userLeft', msg: `${socket.username} left the room.`, room});
-    //         }
-    //       }
-    //     }
-    //     else {
-    //       sl.log('Joined room not found after disconnect.');
-    //     }
-    //   });
-    // });
-    // User.updateOne({name: socket.username}, {online: false}, (err) => {
-    //   if (err) {
-    //     sl.log(err);
-    //   }
-    // });
   });
 });
 
@@ -725,6 +706,10 @@ function defaultPrompt() {
         }
       });
     }
+    else if (res.startsWith(':w ')) {
+      welcomeMsg = res.slice(3);
+      defaultPrompt();
+    }
     else {
       defaultPrompt();
     }
@@ -735,7 +720,7 @@ function createToken(data, socket) {
   jwt.sign({name: data.name}, privateKey, {algorithm: 'RS256', expiresIn: '1d', jwtid: socket.id}, (err, token) => {
     if (!err) {
       socket.username = data.name; //Save username so user can be removed from rooms on disconnect
-      socket.emit('login', {type: 'success', name: data.name, token: token});
+      socket.emit('login', {type: 'success', name: data.name, token: token, welcome: welcomeMsg});
     }
     else {
       socket.emit('login', {type: 'error', err});

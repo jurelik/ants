@@ -175,3 +175,13 @@ exports.addToHistory = function(entry) {
   });
   rl.history.unshift(entry);
 }
+
+//Wrapper for rl.pause()
+exports.pause = function() {
+  rl.pause();
+}
+
+//Wrapper for rl.resume()
+exports.resume = function() {
+  rl.resume();
+}

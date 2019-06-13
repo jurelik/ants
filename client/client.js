@@ -1,16 +1,14 @@
 const sl = require('staylow');
 const io = require('socket.io-client');
 const crypto = require('crypto');
-const chalk = require('chalk');
-
-const socket = io('http://localhost:4000', {reconnectionAttempts: 3});
-const events = require('./events')(socket);
+const style = require('./style');
 
 sl.options({
   defaultPrompt: '',
   globalMask: '*',
   logOnEnter: 'false'
 });
+sl.pause();
 
 let session = {
   activeRoom: '',
@@ -18,6 +16,33 @@ let session = {
   log: {},
   user: {}
 }
+
+module.exports = {
+  session,
+  login,
+  register,
+  home,
+  room,
+  addToLog,
+  drawLog,
+  hashLoginPassword,
+  hashRegisterPassword,
+  hashRoomPassword,
+  generateRSAKeyPair,
+  createRoom,
+  setTitle,
+  clear
+};
+
+const socket = io('http://localhost:4000', {reconnectionAttempts: 3});
+const events = require('./events')(socket);
+// let exec = require('child_process').exec;
+
+// exec('afplay /System/Library/Sounds/Pop.aiff', (err, stdout, stderr) => {
+//   // sl.log(stdout);
+// });
+
+
 
 // //
 // //SOCKET EVENTS
@@ -585,8 +610,7 @@ _,-'     \\_/_|_  |\\   |\`. /   \`._,--===--.__
      \\|     |/      /    \\            \\
                    /     |             \`.
                   /      |               ^
-                 ^       |                         アリ
-Welcome to ants.`, true);
+                 ^       |                         アリ`, true);
     session.connected = true
   }
   sl.prompt('Enter username: ', res => {
@@ -634,7 +658,7 @@ _,-'     \\_/_|_  |\\   |\`. /   \`._,--===--.__
     let regex = /^\w+$/;
     let name = res;
 
-    if(regex.test(name) && name.length >= 3) {
+    if(regex.test(name) && name.length >= 3 && name.length <= 15) {
       hashRegisterPassword(name);
     }
     else if (res === ':q' || res === 'Q') {
@@ -643,7 +667,7 @@ _,-'     \\_/_|_  |\\   |\`. /   \`._,--===--.__
     }
     else {
       clear();
-      sl.log('Username can only contain letters, numbers and underscores and needs to be atleast 3 characters long.');
+      sl.log('Username can only contain letters, numbers and underscores and needs to be between 3-15 characters long.');
       register();
     }
   });
@@ -673,6 +697,14 @@ function home() {
       session.to = user;
       socket.emit('msgInit', {dest: user, visible: 'private', token: session.token})
       home();
+    }
+    else if (res.startsWith(':switch ')) {
+      let _room = res.slice(8);
+      socket.emit('switch', {room: _room, token: session.token});
+    }
+    else if (res.startsWith(':s ')) {
+      let _room = res.slice(3);
+      socket.emit('switch', {room: _room, token: session.token});
     }
     else if (res === ':check' || res === ':c') {
       Object.keys(session.log).forEach(room => {
@@ -735,6 +767,10 @@ function room() {
         let _room = res.slice(8);
         socket.emit('switch', {room: _room, token: session.token});
       }
+      else if (res.startsWith(':s ')) {
+        let _room = res.slice(3);
+        socket.emit('switch', {room: _room, token: session.token});
+      }
       else if (res.startsWith(':leave')) {
         socket.emit('leave', {room: session.activeRoom, token: session.token});
       }
@@ -767,7 +803,7 @@ function room() {
       else if (res === ':check' || res === ':c') {
         Object.keys(session.log).forEach(room => {
           if (room != 'home') {
-            sl.log(`- ${room} (${session.log[room].unread} unread messages)`);
+            sl.log(style.ls(`• ${room} (${session.log[room].unread} unread messages)`));
           }
         });
         room();
@@ -904,19 +940,25 @@ function createRoom(res) {
         home();
       }
       else if (res === 'y') {
-        sl.prompt('Enter room password: ', true, res => {
-          //Hash password before sending to server
-          let salt = crypto.randomBytes(128).toString('base64');
-          crypto.pbkdf2(res, salt, 100000, 128, 'sha512', (err, derivedKey) => {
-            if (!err) {
-              socket.emit('create', {room, user: session.user, private: true, pw: derivedKey.toString('base64'), salt, token: session.token});
-              home();
-            }
-            else {
-              sl.log('Error: ' + err);
-              home();
-            }
-          });
+        sl.prompt('Enter room password or leave empty: ', true, res => {
+          if (res === '') {
+            socket.emit('create', {room, user: session.user, private: true, pw: false, token: session.token});
+            home();
+          }
+          else {
+            //Hash password before sending to server
+            let salt = crypto.randomBytes(128).toString('base64');
+            crypto.pbkdf2(res, salt, 100000, 128, 'sha512', (err, derivedKey) => {
+              if (!err) {
+                socket.emit('create', {room, user: session.user, private: true, pw: derivedKey.toString('base64'), salt, token: session.token});
+                home();
+              }
+              else {
+                sl.log('Error: ' + err);
+                home();
+              }
+            });
+          } 
         });
       }
       else {
@@ -944,18 +986,3 @@ function setTitle(title)
 function clear() {
   process.stdout.write('\x1b[2J');
 }
-
-module.exports.session = session;
-module.exports.login = login;
-module.exports.register = register;
-module.exports.home = home;
-module.exports.room = room;
-module.exports.addToLog = addToLog;
-module.exports.drawLog = drawLog;
-module.exports.hashLoginPassword = hashLoginPassword;
-module.exports.hashRegisterPassword = hashRegisterPassword;
-module.exports.hashRoomPassword = hashRoomPassword;
-module.exports.generateRSAKeyPair = generateRSAKeyPair;
-module.exports.createRoom = createRoom;
-module.exports.setTitle = setTitle;
-module.exports.clear = clear;

@@ -1,7 +1,7 @@
 const sl = require('staylow');
 const crypto = require('crypto');
 const client = require('./client');
-const chalk = require('chalk');
+const style = require('./style');
 
 module.exports = function(socket) {
   //On connect
@@ -20,6 +20,7 @@ module.exports = function(socket) {
       client.session.user.id = socket.id;
       sl.log('Login successful');
       client.clear();
+      client.addToLog('home', data.welcome, true);
       client.drawLog('home');
       client.home();
     }
@@ -32,7 +33,7 @@ module.exports = function(socket) {
       client.login();
     }
     else {
-      sl.log('Error: ' + data.err.message);
+      sl.log(style.err('Error: ' + data.err.message));
     }
   });
 
@@ -48,15 +49,15 @@ module.exports = function(socket) {
     }
     else if (data.type === 'badUsername') {
       client.clear();
-      sl.log('Username can only contain letters, numbers and underscores and needs to be atleast 3 characters long.');
+      sl.log('Username can only contain letters, numbers and underscores and needs to be between 3-15 characters long.');
       client.register();
     }
     else if (data.type === 'error') {
-      sl.log('Error: ' + data.err.message);
+      sl.log(style.err('Error: ' + data.err.message));
       client.register();
     }
     else {
-      sl.log('Error: Unknown');
+      sl.log(style.err('Error: Unknown'));
       client.register();
     }
   });
@@ -67,26 +68,28 @@ module.exports = function(socket) {
       client.hashLoginPassword(data);
     }
     else if (data.type === 'error') {
-      sl.log('Error: ' + data.err.message);
+      sl.log(style.err('Error: ' + data.err.message));
       client.login();
     }
     else {
-      sl.log('Error: Unknown');
+      sl.log(style.err('Error: Unknown'));
     }
   });
 
   //On lsRooms
   socket.on('lsRooms', data => {
     if (data.type === 'success') {
-      sl.log(data.rooms);
+      data.rooms.forEach(room => {
+        sl.log(style.ls('• ' + room));
+      });
       client.home();
     }
     else if (data.type === 'error') {
-      sl.log('Error: ' + data.err.message);
+      sl.log(style.err('Error: ' + data.err.message));
       client.home();
     }
     else {
-      sl.log('Error: Unknown');
+      sl.log(style.err('Error: Unknown'));
       client.home();
     }
   });
@@ -94,13 +97,15 @@ module.exports = function(socket) {
   //On lsUsers
   socket.on('lsUsers', data => {
     if (data.type === 'success') {
-      sl.log(data.userList);
+      data.userList.forEach(user => {
+        sl.log(style.ls('• ' + user));
+      });
     }
     else if (data.type === 'error') {
-      sl.log('Error: ' + data.err.message);
+      sl.log(style.err('Error: ' + data.err.message));
     }
     else {
-      sl.log('Error: Unknown');
+      sl.log(style.err('Error: Unknown'));
     }
   });
 
@@ -108,36 +113,44 @@ module.exports = function(socket) {
   socket.on('join', data => {
     if (data.type === 'success') {
       client.clear();
-      sl.log(`Room successfully joined: ${data.room}`);
-      sl.log(data.welcome);
       client.session.activeRoom = data.room;
       client.session.log[data.room] = {};
       client.session.log[data.room].msg = [];
       client.session.log[data.room].unread = 0;
+
+      sl.log(`Room successfully joined: ${data.room}`);
+      sl.log(style.welcome(data.welcome));
+      client.addToLog(data.room, style.welcome(data.welcome), true);
+
       client.room();
     }
     else if (data.type === 'private') {
-      client.hashRoomPassword(data);
+      if (data.pw) {
+        client.hashRoomPassword(data);
+      }
+      else {
+        socket.emit('joinPrivate', {room: data.room, user: client.session.user, private: true, token: client.session.token});
+      }
     }
     else if (data.type === 'alreadyJoined') {
       sl.log('Room already joined, please use :switch to switch between rooms.');
-      client.session.home ? home() : room();
+      client.session.home ? client.home() : client.room();
     }
     else if (data.type === 'wrongPassword') {
       sl.log('The password you entered is wrong.');
-      client.session.home ? home() : room();
+      client.session.home ? client.home() : client.room();
     }
     else if (data.type === 'notFound') {
       sl.log('Room not found');
-      client.session.home ? home() : room();
+      client.session.home ? client.home() : client.room();
     }
     else if (data.type === 'error') {
-      sl.log('Error: ' + data.err.message);
-      client.session.home ? home() : room();
+      sl.log(style.err('Error: ' + data.err.message));
+      client.session.home ? client.home() : client.room();
     }
     else {
-      sl.log('Error: Unknown');
-      client.session.home ? home() : room();
+      sl.log(style.err('Error: Unknown'));
+      client.session.home ? client.home() : client.room();
     }
   });
 
@@ -158,7 +171,7 @@ module.exports = function(socket) {
       client.room();
     }
     else {
-      sl.log('Error: Unknown');
+      sl.log(style.err('Error: Unknown'));
       client.room();
     }
   });
@@ -175,10 +188,10 @@ module.exports = function(socket) {
       sl.log('Username can only contain letters, numbers and underscores and needs to be atleast 3 characters long.');
     }
     else if (data.type === 'error') {
-      sl.log('Error: ' + data.err.message);
+      sl.log(style.err('Error: ' + data.err.message));
     }
     else {
-      sl.log('Error: Unknown');
+      sl.log(style.err('Error: Unknown'));
     }
   })
 
@@ -230,10 +243,10 @@ module.exports = function(socket) {
       sl.log('User not online.');
     }
     else if (data.type === 'error') {
-      sl.log('Error: ' + data.err.message)
+      sl.log(style.err('Error: ' + data.err.message))
     }
     else {
-      sl.log('Error: Unknown');
+      sl.log(style.err('Error: Unknown'));
     }
   });
 
@@ -242,48 +255,48 @@ module.exports = function(socket) {
     if (data.type === 'success' && data.visible === 'public') {
       if(client.session.activeRoom === data.room) {
         const msg = crypto.privateDecrypt(client.session.privateKey, data.msg);
-        sl.log(`${chalk.bold(data.from)}: ${msg.toString()}`);
-        client.addToLog(data.room, `${chalk.bold(data.from)}: ${msg.toString()}`, true);
+        sl.log(`${style.user(data.from)}: ${msg.toString()}`);
+        client.addToLog(data.room, `${style.user(data.from)}: ${msg.toString()}`, true);
       }
       else {
         const msg = crypto.privateDecrypt(client.session.privateKey, data.msg);
-        client.addToLog(data.room, `${chalk.bold(data.from)}: ${msg.toString()}`, false);
+        client.addToLog(data.room, `${style.user(data.from)}: ${msg.toString()}`, false);
       }
     }
     else if (data.type === 'success' && data.visible === 'private') {
       const msg = crypto.privateDecrypt(client.session.privateKey, data.msg);
       if (!data.self) {
-        sl.log(`${chalk.bold('PRIVATE')} from ${chalk.bold(data.from)}: ${msg.toString()}`);
-        client.addToLog(data.from, `${chalk.bold('PRIVATE')} from ${chalk.bold(data.from)}: ${msg.toString()}`, true);
+        sl.log(`${style.user('PRIVATE')} from ${style.user(data.from)}: ${msg.toString()}`);
+        client.addToLog(data.from, `${style.user('PRIVATE')} from ${style.user(data.from)}: ${msg.toString()}`, true);
       }
       else {
-        sl.log(`${chalk.bold('PRIVATE')} to ${chalk.bold(data.to)}: ${msg.toString()}`);
-        client.addToLog(data.to, `${chalk.bold('PRIVATE')} to ${chalk.bold(data.to)}: ${msg.toString()}`, true);
+        sl.log(`${style.user('PRIVATE')} to ${style.user(data.to)}: ${msg.toString()}`);
+        client.addToLog(data.to, `${style.user('PRIVATE')} to ${style.user(data.to)}: ${msg.toString()}`, true);
       }
     }
     else if (data.type === 'userJoined') {
       if (client.session.activeRoom === data.room) {
-        sl.log(data.msg);
-        client.addToLog(data.room, data.msg, true);
+        sl.log(style.joined(data.msg));
+        client.addToLog(data.room, style.joined(data.msg), true);
       }
       else {
-        client.addToLog(data.room, data.msg, false);
+        client.addToLog(data.room, style.joined(data.msg), false);
       }
     }
     else if (data.type === 'userLeft') {
       if (client.session.activeRoom === data.room) {
-        sl.log(data.msg);
-        client.addToLog(data.room, data.msg, true);
+        sl.log(style.left(data.msg));
+        client.addToLog(data.room, style.left(data.msg), true);
       }
       else {
-        client.addToLog(data.room, data.msg, false);
+        client.addToLog(data.room, style.left(data.msg), false);
       }
     }
     else if (data.type === 'failed') {
-      sl.log('Error: ' + data.err.message);
+      sl.log(style.err('Error: ' + data.err.message));
     }
     else {
-      sl.log('Error: Unknown');
+      sl.log(style.err('Error: Unknown'));
     }
   });
 
@@ -328,11 +341,11 @@ module.exports = function(socket) {
       client.room();
     }
     else if (data.type === 'error') {
-      sl.log('Something went wrong.');
+      sl.log(style.err('Something went wrong.'));
       client.room();
     }
     else {
-      sl.log('Error: Unknown');
+      sl.log(style.err('Error: Unknown'));
       client.room();
     }
   });
@@ -352,7 +365,7 @@ module.exports = function(socket) {
       client.room();
     }
     else {
-      sl.log('Error: Unknown');
+      sl.log(style.err('Error: Unknown'));
       client.room();
     }
   });
@@ -411,7 +424,7 @@ module.exports = function(socket) {
       client.home();
     }
     else {
-      sl.log('Error: Unknown');
+      sl.log(style.err('Error: Unknown'));
       client.home();
     }
   });
@@ -427,11 +440,11 @@ module.exports = function(socket) {
       client.home();
     }
     else if (data.type === 'error') {
-      sl.log('Something went wrong.');
+      sl.log(style.err('Something went wrong.'));
       client.home();
     }
     else {
-      sl.log('Error: Unknown');
+      sl.log(style.err('Error: Unknown'));
       client.home();
     }
   });
@@ -465,7 +478,7 @@ module.exports = function(socket) {
       client.home();
     }
     else {
-      sl.log('Error: Unknown');
+      sl.log(style.err('Error: Unknown'));
       client.home();
     }
   });
@@ -481,11 +494,11 @@ module.exports = function(socket) {
       client.home();
     }
     else if (data.type === 'error') {
-      sl.log('Something went wrong.');
+      sl.log(style.err('Something went wrong.'));
       client.home();
     }
     else {
-      sl.log('Error: Unknown');
+      sl.log(style.err('Error: Unknown'));
       client.home();
     }
   });
@@ -499,16 +512,16 @@ module.exports = function(socket) {
       sl.log('You do not have permission to change the welcome message.')
     }
     else if (data.type === 'error') {
-      sl.log('Error: ', data.err.message);
+      sl.log(style.error('Error: ' + data.err.message));
     }
     else {
-      sl.log('Error: Unknown');
+      sl.log(style.err('Error: Unknown'));
     }
   });
 
   //On tokenNotValid
   socket.on('tokenNotValid', () => {
-    sl.log('Token is not valid, please log in again.');
+    sl.log(style.err('Token is not valid, please log in again.'));
     client.login();
   });
 }
