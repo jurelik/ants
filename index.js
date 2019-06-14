@@ -274,7 +274,7 @@ io.on('connection', socket => {
       if (!err) {
         Room.findOne({name: data.room}, (err, res) => {
           if (!err && res) {
-            for (x = 0; x < res.users.length; x++) {
+            for (let x = 0; x < res.users.length; x++) {
               if (res.users[x].name === decoded.name) {
                 res.users.splice(x, 1); // Remove user from room
                 socket.allRooms.splice(socket.allRooms.indexOf(data.room), 1); //Remove room from list of rooms socket is connected to
@@ -739,7 +739,7 @@ function disconnect(socket) {
   socket.allRooms.forEach(room => {
     Room.findOne({name: room}, (err, res) => {
       if (!err && res) {
-        for (x = 0; x < res.users.length; x++) {
+        for (let x = 0; x < res.users.length; x++) {
           if (res.users[x].name === socket.username) {
             res.users.splice(x, 1);
             x--;

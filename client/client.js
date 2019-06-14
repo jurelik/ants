@@ -8,7 +8,7 @@ sl.options({
   globalMask: '*',
   logOnEnter: 'false'
 });
-sl.pause();
+// sl.pause();
 
 let session = {
   activeRoom: '',
@@ -568,9 +568,10 @@ const events = require('./events')(socket);
 
 //Login
 function login() {
+  sl.resume();
   setTitle('ants');
   if (session.connected === false) {
-    for (x = 0; x < process.stdout.rows - 18; x++) {
+    for (let x = 0; x < process.stdout.rows - 18; x++) {
       sl.log('');
     }
     session.log.home = {};
@@ -612,7 +613,7 @@ _,-'     \\_/_|_  |\\   |\`. /   \`._,--===--.__
                   /      |               ^
                  ^       |                         アリ`, true);
     session.connected = true
-  }
+}
   sl.prompt('Enter username: ', res => {
     if (res.startsWith(':')) {
       if(res === ':n') {
