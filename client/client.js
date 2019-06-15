@@ -715,6 +715,19 @@ function home() {
       });
       home();
     }
+    else if (res === ':help' || res === ':h') {
+      sl.log(`You can use the following commands while on the home screen:
+• :ls - list all public rooms
+• :join ${style.gray('[room]')} - join ${style.gray('[room]')}
+• :create ${style.gray('[room]')} - create ${style.gray('[room]')}
+• :c or :check - check joined rooms for unread messages
+• :s ${style.gray('[room]')} or :switch ${style.gray('[room]')} - switch screen to ${style.gray('[room]')}
+• :p ${style.gray('[user]')} ${style.gray('[message]')} - send a private ${style.gray('[message]')} to ${style.gray('[user]')}
+• :changepw - change password
+• :selfdestruct - delete account
+• :q - exit ants`);
+      home();
+    }
     else if (res === ':changepw') {
       socket.emit('changePwInit', {token: session.token});
     }
@@ -738,7 +751,7 @@ function home() {
       process.exit();
     }
     else {
-      sl.log('Command not found')
+      sl.log(`Command not found, type ':h' for help`);
       home();
     }
   });
@@ -754,14 +767,16 @@ function room() {
         let room = res.slice(6);
         socket.emit('join', {room, user: session.user, token: session.token});
       }
-      else if (res.startsWith(':p ')) {
-        let array = res.split(' ');
-        let user = array[1];
-        let msg = array.slice(2).join(' ');
-        sl.addToHistory(`:p ${user} `);
-        session.msg = msg;
-        session.to = user;
-        socket.emit('msgInit', {dest: user, visible: 'private', token: session.token})
+      else if (res === ':ls') {
+        socket.emit('lsUsers', {token: session.token});
+        room();
+      }
+      else if (res === ':check' || res === ':c') {
+        Object.keys(session.log).forEach(room => {
+          if (room != 'home') {
+            sl.log(style.ls(`• ${room} (${session.log[room].unread} unread messages)`));
+          }
+        });
         room();
       }
       else if (res.startsWith(':switch ')) {
@@ -772,12 +787,20 @@ function room() {
         let _room = res.slice(3);
         socket.emit('switch', {room: _room, token: session.token});
       }
-      else if (res.startsWith(':leave')) {
-        socket.emit('leave', {room: session.activeRoom, token: session.token});
+      else if (res.startsWith(':p ')) {
+        let array = res.split(' ');
+        let user = array[1];
+        let msg = array.slice(2).join(' ');
+        sl.addToHistory(`:p ${user} `);
+        session.msg = msg;
+        session.to = user;
+        socket.emit('msgInit', {dest: user, visible: 'private', token: session.token})
+        room();
       }
-      else if (res === ':q' || res === 'Q') {
-        sl.log('Shutting down.');
-        process.exit();
+      else if (res === ':home') {
+        clear();
+        drawLog('home');
+        home();
       }
       else if (res.startsWith(':log ')) {
         let user = res.slice(5);
@@ -792,21 +815,26 @@ function room() {
           room();
         }
       }
-      else if (res === ':ls') {
-        socket.emit('lsUsers', {token: session.token});
-        room();
+      else if (res.startsWith(':leave')) {
+        socket.emit('leave', {room: session.activeRoom, token: session.token});
       }
-      else if (res === ':home') {
-        clear();
-        drawLog('home');
-        home();
+      else if (res === ':q' || res === 'Q') {
+        sl.log('Shutting down.');
+        process.exit();
       }
-      else if (res === ':check' || res === ':c') {
-        Object.keys(session.log).forEach(room => {
-          if (room != 'home') {
-            sl.log(style.ls(`• ${room} (${session.log[room].unread} unread messages)`));
-          }
-        });
+      else if (res === ':help' || res === ':h') {
+        sl.log(`You can use the following commands while in a room:
+• :ls - list all users in the room
+• :join ${style.gray('[room]')} - join ${style.gray('[room]')}
+• :c or :check - check joined rooms for unread messages
+• :s ${style.gray('[room]')} or :switch ${style.gray('[room]')} - switch screen to ${style.gray('[room]')}
+• :p ${style.gray('[user]')} ${style.gray('[message]')} - send a private ${style.gray('[message]')} to ${style.gray('[user]')}
+• :home - go to home screen
+• :log ${style.gray('[user]')} - log private messages to/from ${style.gray('[user]')}
+• :welcome ${style.gray('[message]')} - set room welcome ${style.gray('[message]')} (only for owner)
+• :delete - delete room (only for owner)
+• :leave - leave current room
+• :q - exit ants`);
         room();
       }
       else if (res.startsWith(':welcome ')) {
@@ -818,7 +846,7 @@ function room() {
         socket.emit('deleteRoomInit', {room: session.activeRoom, token: session.token});
       }
       else {
-        sl.log('Command not found');
+        sl.log(`Command not found, type ':h' for help`);
         room();
       }
     }

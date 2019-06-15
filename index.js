@@ -10,6 +10,7 @@ const jwt = require('jsonwebtoken');
 //Init socket.io and a http server
 const io = socketio.listen(4000);
 
+//Export functions and import events
 module.exports = {
   createToken,
   verifyToken,

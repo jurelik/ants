@@ -79,6 +79,7 @@ module.exports = function(socket) {
   //On lsRooms
   socket.on('lsRooms', data => {
     if (data.type === 'success') {
+      sl.log(style.ls('PUBLIC ROOMS:'))
       data.rooms.forEach(room => {
         sl.log(style.ls('• ' + room));
       });
