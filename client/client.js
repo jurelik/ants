@@ -8,7 +8,7 @@ sl.options({
   globalMask: '*',
   logOnEnter: 'false'
 });
-// sl.pause();
+sl.pause();
 
 let session = {
   activeRoom: '',
