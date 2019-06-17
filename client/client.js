@@ -842,6 +842,9 @@ function room() {
         socket.emit('welcome', {msg, token: session.token});
         room();
       }
+      else if (res === ':changeroompw') {
+        socket.emit('changeRoomPwInit', {token: session.token});
+      }
       else if (res === ':delete') {
         socket.emit('deleteRoomInit', {room: session.activeRoom, token: session.token});
       }

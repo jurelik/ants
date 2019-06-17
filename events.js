@@ -461,6 +461,82 @@ module.exports = function(io) {
         }
       });
     });
+
+    //Change room pw init event
+    socket.on('changeRoomPwInit', data => {
+      server.verifyToken(data, socket.id, (err, decoded) => {
+        if (!err) {
+          Room.findOne({name: socket.activeRoom}, (err, res) => {
+            if (!err && res) {
+              if (!res.private) {
+                socket.emit('changeRoomPwInit', {type: 'public'});
+              }
+              else if (res.private && res.pw) {
+                socket.emit('changeRoomPwInit', {type: 'checkPw', salt: res.salt});
+              }
+              else if (res.private && !res.pw) {
+                socket.emit('changeRoomPwInit', {type: 'noPw'});
+              }
+              else {
+                socket.emit('changeRoomPwInit', {type: 'error', err});
+              }
+            }
+          });
+        }
+        else {
+          socket.emit('tokenNotValid');
+        }
+      });
+    });
+
+    //Change room pw event
+    socket.on('changeRoomPw', data => {
+      server.verifyToken(data, socket.id, (err, decoded) => {
+        if (!err && data.type === 'checkPw') {
+          Room.findOne({name: socket.activeRoom}, (err, res) => {
+            if (!err && res && data.oldPw === res.pw) {
+              res.pw = data.newPw;
+              res.salt = data.salt;
+
+              res.save(err => {
+                if (!err) {
+                  socket.emit('changeRoomPw', {type: 'success'});
+                }
+                else {
+                  socket.emit('changeRoomPw', {type: 'error', err});
+                }
+              })
+            }
+            else if (!err && res && data.oldPw != res.pw) {
+              socket.emit('changeRoomPw', {type: 'wrongPw'});
+            }
+          });
+        }
+        else if (!err && data.type === 'noPw') {
+          Room.findOne({name: socket.activeRoom}, (err, res) => {
+            if (!err && res && !res.pw) { //Make sure to check for res.pw!
+              res.pw = data.newPw;
+              res.salt = data.salt;
+
+              res.save(err => {
+                if (!err) {
+                  socket.emit('changeRoomPw', {type: 'success'});
+                }
+                else {
+                  socket.emit('changeRoomPw', {type: 'error', err});
+                }
+              });
+            }
+            else {
+              socket.emit('changeRoomPw', {type: 'error'});
+            }
+          });
+        }
+        else {
+          socket.emit('tokenNotValid');
+        }
+      });
+    });
   
     //Delete room init event
     socket.on('deleteRoomInit', data => {

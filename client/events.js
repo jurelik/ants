@@ -161,6 +161,8 @@ module.exports = function(socket) {
       sl.log(`You have left room '${data.room}'`);
       delete client.session.log[data.room];
       client.session.activeRoom = '';
+      client.clear();
+      client.drawLog('home');
       client.home();
     }
     else if (data.type === 'roomNotFound') {
@@ -501,6 +503,106 @@ module.exports = function(socket) {
     else {
       sl.log(style.err('Error: Unknown'));
       client.home();
+    }
+  });
+
+  //On changeRoomPwInit
+  socket.on('changeRoomPwInit', data => {
+    if (data.type === 'public') {
+      sl.log(`Public rooms can't have a password.`);
+      client.room();
+    }
+    else if (data.type === 'checkPw') {
+      sl.prompt('Enter old room password: ', true, res => {
+        const oldPw = res;
+        sl.prompt('Enter new password: ', true, res => {
+          const newPw = res;
+          sl.prompt('Confirm new password: ', true, res => {
+            if (newPw === res) {
+              crypto.pbkdf2(oldPw, data.salt, 100000, 128, 'sha512', (err, derivedKey) => {
+                const hashedOldPw = derivedKey.toString('base64');
+                let salt = crypto.randomBytes(128).toString('base64');
+
+                if (!err) {
+                  crypto.pbkdf2(newPw, salt, 100000, 128, 'sha512', (err, derivedKey) => {
+                    if (!err) {
+                      socket.emit('changeRoomPw', {type: 'checkPw', oldPw: hashedOldPw, newPw: derivedKey.toString('base64'), salt, token: client.session.token});
+                    }
+                    else {
+                      sl.log('Error: ' + err);
+                      client.room();
+                    }
+                  });
+                }
+                else {
+                  sl.log('Error: ' + err);
+                  client.room();
+                }
+              });
+            }
+            else {
+              sl.log(`The passwords you entered don't match. Aborting password change.`);
+              client.room();
+            }
+          });
+        })
+      });
+    }
+    else if (data.type === 'noPw') {
+      sl.prompt('Enter new password: ', true, res => {
+        const newPw = res;
+        sl.prompt('Confirm password: ', true, res => {
+          if (newPw === res) {
+            let salt = crypto.randomBytes(128).toString('base64');
+            crypto.pbkdf2(newPw, salt, 100000, 128, 'sha512', (err, derivedKey) => {
+              if (!err) {
+                socket.emit('changeRoomPw', {type: 'noPw', newPw: derivedKey.toString('base64'), salt, token: client.session.token});
+              }
+              else {
+                sl.log('Error: ' + err);
+                client.room();
+              }
+            });
+          }
+          else {
+            sl.log(`Passwords you entered didn't match. Aborting password change.`);
+            client.room();
+          }
+        });
+      });
+    }
+    else if (data.type === 'error') {
+      sl.log('Error: ' + data.error.message);
+      client.room();
+    }
+    else {
+      sl.log('Error: Unknown');
+      client.room();
+    }
+  });
+
+  //On changeRoomPw
+  socket.on('changeRoomPw', data => {
+    if (data.type === 'success') {
+      sl.log('Password successfully changed.');
+      client.room();
+    }
+    else if (data.type === 'wrongPw') {
+      sl.log('Old password you entered is wrong. Aborting password change.');
+      client.room();
+    }
+    else if (data.type === 'error') {
+      if (data.err) {
+        sl.log('Error: ' + data.err.message);
+      }
+      else {
+        sl.log('Error: Unknown');
+      }
+      client.room();
+    }
+    else {
+      sl.log('Error: Unknown');
+      client.room();
     }
   });
 
