@@ -525,8 +525,11 @@ module.exports = function(socket) {
 
                 if (!err) {
                   crypto.pbkdf2(newPw, salt, 100000, 128, 'sha512', (err, derivedKey) => {
-                    if (!err) {
+                    if (!err && newPw != '') {
                       socket.emit('changeRoomPw', {type: 'checkPw', oldPw: hashedOldPw, newPw: derivedKey.toString('base64'), salt, token: client.session.token});
+                    }
+                    else if (!err && newPw === '') { //If you remove this, setting an empty password will still prompt the user for password - feel free to do it, not recommended though
+                      socket.emit('changeRoomPw', {type: 'deletePw', oldPw: hashedOldPw, newPw: derivedKey.toString('base64'), salt, token: client.session.token});
                     }
                     else {
                       sl.log('Error: ' + err);
@@ -555,8 +558,11 @@ module.exports = function(socket) {
           if (newPw === res) {
             let salt = crypto.randomBytes(128).toString('base64');
             crypto.pbkdf2(newPw, salt, 100000, 128, 'sha512', (err, derivedKey) => {
-              if (!err) {
+              if (!err && newPw != '') {
                 socket.emit('changeRoomPw', {type: 'noPw', newPw: derivedKey.toString('base64'), salt, token: client.session.token});
+              }
+              else if (!err && newPw === '') { //If you remove this, setting an empty password will still prompt the user for password - feel free to do it, not recommended though
+                socket.emit('changeRoomPw', {type: 'deletePw', newPw: derivedKey.toString('base64'), salt, token: client.session.token});
               }
               else {
                 sl.log('Error: ' + err);
@@ -598,10 +604,15 @@ module.exports = function(socket) {
     else if (data.type === 'error') {
       if (data.err) {
         sl.log('Error: ' + data.err.message);
+        client.room();
       }
       else {
-        sl.log('Error: Unknown');
+        sl.log('Something went wrong.');
+        client.room();
       }
+    }
+    else if (data.type === 'public') {
+      sl.log(`Public rooms can't have a password.`);
       client.room();
     }
     else {

@@ -497,7 +497,7 @@ module.exports = function(io) {
       server.verifyToken(data, socket.id, (err, decoded) => {
         if (!err && data.type === 'checkPw') {
           Room.findOne({name: socket.activeRoom}, (err, res) => {
-            if (!err && res && data.oldPw === res.pw) {
+            if (!err && res && data.oldPw === res.pw && res.private) {
               res.pw = data.newPw;
               res.salt = data.salt;
 
@@ -508,7 +508,7 @@ module.exports = function(io) {
                 else {
                   socket.emit('changeRoomPw', {type: 'error', err});
                 }
-              })
+              });
             }
             else if (!err && res && data.oldPw != res.pw) {
               socket.emit('changeRoomPw', {type: 'wrongPw'});
@@ -517,7 +517,7 @@ module.exports = function(io) {
         }
         else if (!err && data.type === 'noPw') {
           Room.findOne({name: socket.activeRoom}, (err, res) => {
-            if (!err && res && !res.pw) { //Make sure to check for res.pw!
+            if (!err && res && res.private && !res.pw) { //Make sure to check for res.pw!
               res.pw = data.newPw;
               res.salt = data.salt;
 
@@ -534,6 +534,32 @@ module.exports = function(io) {
               socket.emit('changeRoomPw', {type: 'error'});
             }
           });
+        }
+        else if (!err && data.type === 'deletePw') {
+          Room.findOne({name: socket.activeRoom}, (err, res) => {
+            if (!err && res && data.oldPw === res.pw && res.private && res.pw) { //Make sure to check for res.pw
+              res.pw = undefined;
+              res.salt = undefined;
+
+              res.save(err => {
+                if (!err) {
+                  socket.emit('changeRoomPw', {type: 'success'});
+                }
+                else {
+                  socket.emit('changeRoomPw', {type: 'error', err});
+                }
+              });
+            }
+            else if (!err && res && !res.pw) {
+              socket.emit('changeRoomPw', {type: 'success'});
+            }
+            else {
+              socket.emit('changeRoomPw', {type: 'error'});
+            }
+          });
+        }
+        else if (!err && res && !res.private) {
+          socket.emit('changeRoomPw', {type: 'public'});
         }
         else {
           socket.emit('tokenNotValid');
