@@ -471,6 +471,9 @@ module.exports = function(io) {
               if (!res.private) {
                 socket.emit('changeRoomPwInit', {type: 'public'});
               }
+              else if (res.private && res.owner != decoded.name) {
+                socket.emit('changeRoomPwInit', {type: 'noPermission'});
+              }
               else if (res.private && res.pw) {
                 socket.emit('changeRoomPwInit', {type: 'checkPw', salt: res.salt});
               }

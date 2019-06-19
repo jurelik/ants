@@ -571,6 +571,10 @@ module.exports = function(socket) {
         });
       });
     }
+    else if (data.type === 'noPermission') {
+      sl.log('You do not have the permission to change the room password.')
+      client.room();
+    }
     else if (data.type === 'error') {
       sl.log('Error: ' + data.error.message);
       client.room();
