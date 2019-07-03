@@ -677,6 +677,7 @@ _,-'     \\_/_|_  |\\   |\`. /   \`._,--===--.__
 //Home
 function home() {
   session.home = true;
+  session.activeRoom = 'home';
   setTitle('home');
   sl.prompt('', false, res => {
     if (res === ':ls') {
