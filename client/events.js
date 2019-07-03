@@ -158,12 +158,11 @@ module.exports = function(socket) {
   //On leave
   socket.on('leave', data => {
     if (data.type === 'success') {
-      sl.log(`You have left room '${data.room}'`);
       delete client.session.log[data.room];
-      client.session.activeRoom = '';
       client.clear();
       client.drawLog('home');
       client.home();
+      sl.log(`You have left room '${data.room}'`);
     }
     else if (data.type === 'roomNotFound') {
       sl.log(`You can't leave a room you never joined.`);
