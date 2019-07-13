@@ -695,6 +695,7 @@ function home() {
       let user = array[1];
       let msg = array.slice(2).join(' ');
       sl.addToHistory(`:p ${user} `);
+      sl.showHistory();
       session.msg = msg;
       session.to = user;
       socket.emit('msgInit', {dest: user, visible: 'private', token: session.token})
@@ -710,8 +711,9 @@ function home() {
     }
     else if (res === ':check' || res === ':c') {
       Object.keys(session.log).forEach(room => {
-        if (room != 'home') {
-          sl.log(`- ${room} (${session.log[room].unread} unread messages)`);
+        if (room != 'home' && !session.log[room].private) {
+          sl.log(room);
+          sl.log(style.ls(`• ${room} (${session.log[room].unread} unread messages)`));
         }
       });
       home();
@@ -774,7 +776,7 @@ function room() {
       }
       else if (res === ':check' || res === ':c') {
         Object.keys(session.log).forEach(room => {
-          if (room != 'home') {
+          if (room != 'home' && !session.log[room].private) {
             sl.log(style.ls(`• ${room} (${session.log[room].unread} unread messages)`));
           }
         });
@@ -872,7 +874,8 @@ function addToLog(room, msg, active) {
     session.log[room].unread++;
   }
   else { //if private
-    session.log[room] = [];
+    session.log[room] = {};
+    session.log[room].private = true;
     session.log[room].msg = [];
     session.log[room].msg.push(msg);
     session.log[room].unread = 0;

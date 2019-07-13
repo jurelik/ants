@@ -116,6 +116,7 @@ module.exports = function(socket) {
       client.clear();
       client.session.activeRoom = data.room;
       client.session.log[data.room] = {};
+      client.session.log[data.room].private = false;
       client.session.log[data.room].msg = [];
       client.session.log[data.room].unread = 0;
 
