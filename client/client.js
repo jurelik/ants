@@ -695,7 +695,6 @@ function home() {
       let user = array[1];
       let msg = array.slice(2).join(' ');
       sl.addToHistory(`:p ${user} `);
-      sl.showHistory();
       session.msg = msg;
       session.to = user;
       socket.emit('msgInit', {dest: user, visible: 'private', token: session.token})
@@ -716,6 +715,28 @@ function home() {
           sl.log(style.ls(`• ${room} (${session.log[room].unread} unread messages)`));
         }
       });
+      home();
+    }
+    else if (res.startsWith(':log ')) {
+      let user = res.slice(5);
+      if (session.log[user] && session.log[user].private) {
+        session.log[user].msg.forEach(msg => {
+          sl.log(msg);
+        });
+        home();
+      }
+      else if (session.log[user] && !session.log[user].private) {
+        sl.log('Log can only display private conversations.');
+        home();
+      }
+      else {
+        sl.log('Log not found.');
+        home();
+      }
+    }
+    else if (res === ':clear') {
+      clear();
+      drawLog('home');
       home();
     }
     else if (res === ':help' || res === ':h') {
@@ -807,14 +828,18 @@ function room() {
       }
       else if (res.startsWith(':log ')) {
         let user = res.slice(5);
-        if (session.log[user]) {
+        if (session.log[user] && session.log[user].private) {
           session.log[user].msg.forEach(msg => {
             sl.log(msg);
           });
           room();
         }
+        else if (session.log[user] && !session.log[user].private) {
+          sl.log('Log can only display private conversations.');
+          room();
+        }
         else {
-          sl.log('Log not found');
+          sl.log('Log not found.');
           room();
         }
       }
