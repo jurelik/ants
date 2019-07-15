@@ -226,23 +226,34 @@ module.exports = function(io) {
         if (!err) {
           Room.findOne({name: data.room}, (err, res) => {
             if (!err && res) {
-              for (let x = 0; x < res.users.length; x++) {
-                if (res.users[x].name === decoded.name) {
-                  res.users.splice(x, 1); // Remove user from room
-                  socket.allRooms.splice(socket.allRooms.indexOf(data.room), 1); //Remove room from list of rooms socket is connected to
-                  res.save(err => {
-                    if (!err) {
-                      socket.emit('leave', {type: 'success', room: data.room});
-                    }
-                    else {
-                      socket.emit('leave', {type: 'error', err});
-                    }
-                  });
-                  x--;
+              let userFound = false;
+              for (let y = 0; y < res.users.length; y++) {
+                if (res.users[y].name === decoded.name) {
+                  userFound = true;
                 }
-                else {
-                  socket.to(res.users[x].id).emit('msg', {type: 'userLeft', msg: `${decoded.name} left the room.`, room: res.name});
+              }
+              if (userFound) {
+                for (let x = 0; x < res.users.length; x++) {
+                  if (res.users[x].name === decoded.name) {
+                    res.users.splice(x, 1); // Remove user from room
+                    socket.allRooms.splice(socket.allRooms.indexOf(data.room), 1); //Remove room from list of rooms socket is connected to
+                    res.save(err => {
+                      if (!err) {
+                        socket.emit('leave', {type: 'success', room: data.room});
+                      }
+                      else {
+                        socket.emit('leave', {type: 'error', err});
+                      }
+                    });
+                    x--;
+                  }
+                  else {
+                    socket.to(res.users[x].id).emit('msg', {type: 'userLeft', msg: `${decoded.name} left the room.`, room: res.name});
+                  }
                 }
+              }
+              else {
+                socket.emit('leave', {type: 'roomNotFound'});
               }
             }
             else if (!err && !res) {

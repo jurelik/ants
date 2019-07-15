@@ -167,15 +167,15 @@ module.exports = function(socket) {
     }
     else if (data.type === 'roomNotFound') {
       sl.log(`You can't leave a room you never joined.`);
-      client.room();
+      client.session.home ? client.home() : client.room();
     }
     else if (data.type === 'error') {
       sl.log('Error: ' + data.err.message);
-      client.room();
+      client.session.home ? client.home() : client.room();
     }
     else {
       sl.log(style.err('Error: Unknown'));
-      client.room();
+      client.session.home ? client.home() : client.room();
     }
   });
 

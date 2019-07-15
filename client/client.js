@@ -739,6 +739,10 @@ function home() {
       drawLog('home');
       home();
     }
+    else if (res.startsWith(':leave ')) {
+      let _room = res.slice(7);
+      socket.emit('leave', {room: _room, token: session.token});
+    }
     else if (res === ':help' || res === ':h') {
       sl.log(`You can use the following commands while on the home screen:
 • :ls - list all public rooms
@@ -747,6 +751,8 @@ function home() {
 • :c or :check - check joined rooms for unread messages
 • :s ${style.gray('[room]')} or :switch ${style.gray('[room]')} - switch screen to ${style.gray('[room]')}
 • :p ${style.gray('[user]')} ${style.gray('[message]')} - send a private ${style.gray('[message]')} to ${style.gray('[user]')}
+• :leave ${style.gray('[room]')} - leave ${style.gray('[room]')}
+• :clear - clear screen
 • :changepw - change password
 • :selfdestruct - delete account
 • :q - exit ants`);
@@ -843,7 +849,7 @@ function room() {
           room();
         }
       }
-      else if (res.startsWith(':leave')) {
+      else if (res === ':leave') {
         socket.emit('leave', {room: session.activeRoom, token: session.token});
       }
       else if (res === ':q' || res === 'Q') {
