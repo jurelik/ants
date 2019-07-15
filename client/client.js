@@ -577,24 +577,6 @@ function login() {
     session.log.home = {};
     session.log.home.msg = [];
     session.log.home.unread = 0;
-    sl.log(`
-  
-
-  
-             ,
-    _,-'\\   /|   .    .    /\`.
-_,-'     \\_/_|_  |\\   |\`. /   \`._,--===--.__
-^       _/"/  " \\ : \\__|_ /.   ,'    :.  :. .\`-._
-      // ^   /7 t'""    "\`-._/ ,'\\   :   :  :   .\`.
-      Y      L/ )\         ]],'    \\  :   :  :   :  \`.
-      |        /  \`.n_n_n,','\\_    \\ ;   ;  ;   ;  _>
-      |__    ,'     |  \\\`-'    \`-.__\\_______.==---'
-     //  \`""\\\\      |   \\            \\
-     \\|     |/      /    \\            \\
-                   /     |             \`.
-                  /      |               ^
-                 ^       |                         アリ`)
-    sl.log('Welcome to ants. To create a new account please enter :n');
     addToLog('home', `
       
 
@@ -613,14 +595,32 @@ _,-'     \\_/_|_  |\\   |\`. /   \`._,--===--.__
                   /      |               ^
                  ^       |                         アリ`, true);
     session.connected = true
-}
+  }
+  clear();
+  sl.log(`
+  
+
+  
+             ,
+    _,-'\\   /|   .    .    /\`.
+_,-'     \\_/_|_  |\\   |\`. /   \`._,--===--.__
+^       _/"/  " \\ : \\__|_ /.   ,'    :.  :. .\`-._
+      // ^   /7 t'""    "\`-._/ ,'\\   :   :  :   .\`.
+      Y      L/ )\         ]],'    \\  :   :  :   :  \`.
+      |        /  \`.n_n_n,','\\_    \\ ;   ;  ;   ;  _>
+      |__    ,'     |  \\\`-'    \`-.__\\_______.==---'
+     //  \`""\\\\      |   \\            \\
+     \\|     |/      /    \\            \\
+                   /     |             \`.
+                  /      |               ^
+                 ^       |                         アリ`)
+  sl.log('Welcome to ants. To create a new account please enter :n');
   sl.prompt('Enter username: ', res => {
     if (res.startsWith(':')) {
       if(res === ':n') {
-        clear();
         register();
       }
-      else if (res === ':q' || res === 'Q') {
+      else if (res === ':q' || res === ':Q') {
         sl.log('Shutting down.');
         process.exit();
       }
@@ -637,6 +637,7 @@ _,-'     \\_/_|_  |\\   |\`. /   \`._,--===--.__
 
 //Register
 function register() {
+  clear();
   sl.log(`
   
 
@@ -662,14 +663,13 @@ _,-'     \\_/_|_  |\\   |\`. /   \`._,--===--.__
     if(regex.test(name) && name.length >= 3 && name.length <= 15) {
       hashRegisterPassword(name);
     }
-    else if (res === ':q' || res === 'Q') {
+    else if (res === ':q' || res === ':Q') {
       sl.log('Shutting down.');
       process.exit();
     }
     else {
-      clear();
-      sl.log('Username can only contain letters, numbers and underscores and needs to be between 3-15 characters long.');
-      register();
+      login();
+      sl.log(style.err('Username can only contain letters, numbers and underscores and needs to be between 3-15 characters long.'));
     }
   });
 }
@@ -776,7 +776,7 @@ function home() {
         }
       });
     }
-    else if (res === ':q' || res === 'Q') {
+    else if (res === ':q' || res === ':Q') {
       sl.log('Shutting down.');
       process.exit();
     }
@@ -852,7 +852,7 @@ function room() {
       else if (res === ':leave') {
         socket.emit('leave', {room: session.activeRoom, token: session.token});
       }
-      else if (res === ':q' || res === 'Q') {
+      else if (res === ':q' || res === ':Q') {
         sl.log('Shutting down.');
         process.exit();
       }

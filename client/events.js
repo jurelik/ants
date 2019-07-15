@@ -6,7 +6,6 @@ const style = require('./style');
 module.exports = function(socket) {
   //On connect
   socket.on('connect', () => {
-    sl.log('Connection made.');
     client.login();
   }).on('connect_error', (err) => {
     sl.log("Can't connect to server.");
@@ -40,25 +39,24 @@ module.exports = function(socket) {
   //On register
   socket.on('register', data => {
     if (data.type === 'success') {
-      sl.log('Account created');
       client.login();
+      sl.log(style.success('ACCOUNT CREATED'));
     }
     else if (data.type === 'userExists') {
-      sl.log('User already exists')
-      client.register();
+      client.login();
+      sl.log(style.err('USER ALREADY EXISTS'))
     }
     else if (data.type === 'badUsername') {
-      client.clear();
-      sl.log('Username can only contain letters, numbers and underscores and needs to be between 3-15 characters long.');
-      client.register();
+      client.login();
+      sl.log(style.err('Username can only contain letters, numbers and underscores and needs to be between 3-15 characters long.'));  
     }
     else if (data.type === 'error') {
+      client.login();
       sl.log(style.err('Error: ' + data.err.message));
-      client.register();
     }
     else {
+      client.login();
       sl.log(style.err('Error: Unknown'));
-      client.register();
     }
   });
 

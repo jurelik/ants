@@ -6,7 +6,8 @@ const joined = chalk.bold.gray;
 const left = chalk.bold.gray;
 const gray = chalk.gray;
 const ls = chalk.cyan;
-const err = chalk.bold.red;
+const err = chalk.red;
+const success = chalk.green;
 const welcome = chalk.bold;
 
 module.exports = {
@@ -17,5 +18,6 @@ module.exports = {
   gray,
   ls,
   err,
+  success,
   welcome
 };
