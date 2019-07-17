@@ -17,22 +17,23 @@ module.exports = function(socket) {
       client.session.token = data.token;
       client.session.user.name = data.name;
       client.session.user.id = socket.id;
-      sl.log('Login successful');
       client.clear();
       client.addToLog('home', data.welcome, true);
       client.drawLog('home');
       client.home();
+      sl.log(style.success('LOGIN SUCCESSFULL.'));
     }
     else if (data.type === 'alreadyOnline') {
-      sl.log('User already logged in.');
       client.login();
+      sl.log(style.err('USER ALREADY LOGGED IN.'));
     }
     else if (data.type === 'failed') {
-      sl.log('Username or password incorrect.');
       client.login();
+      sl.log(style.err('USERNAME OR PASSWORD INCORRECT'));
     }
     else {
-      sl.log(style.err('Error: ' + data.err.message));
+      client.login();
+      sl.log(style.err('ERROR: ' + data.err.message));
     }
   });
 
