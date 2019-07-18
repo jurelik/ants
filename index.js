@@ -696,18 +696,20 @@ mongoose.connection.once('open', () => {
 function defaultPrompt() {
   sl.prompt('', res => {
     if (res === ':q') {
+      let err = 0;
       sl.log('Shutting down...');
       Room.updateMany({}, {users: []}, (err, raw) => {
         if (!err) {
-          User.updateMany({}, {online: false}, (err, raw) => {
-            if (!err) {
-              sl.log('Server shut down successfully.');
-              process.exit();
-            }
-            else {
-              sl.log('Error: ' + err.message);
-            }
-          });
+          sl.log('Rooms wiped...')
+        }
+        else {
+          sl.log('Error: ' + err.message);
+        }
+      });
+      User.updateMany({}, {online: false}, (err, raw) => {
+        if (!err) {
+          sl.log('Server shut down successfully.');
+          process.exit();
         }
         else {
           sl.log('Error: ' + err.message);
