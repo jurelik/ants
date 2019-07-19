@@ -5,6 +5,7 @@ let muted = false; //Is mute active?
 let promptActive = false; //Is prompt active?
 let upCounter = 0; //How many times has up/down been pressed
 let leftCounter = 0; //How many times has left/right been pressed
+let tempHistory = []; //Store history while input is muted
 
 let globalOptions = {
   defaultPrompt: '> ', //Default prompt
@@ -160,6 +161,8 @@ exports.prompt = function(question, mute, callback) {
           rl.prompt();
           //Inject this bit
           if (mute) {
+            tempHistory = rl.history;
+            rl.history = [];
             muted = true;
           }
           else {
@@ -178,7 +181,7 @@ exports.prompt = function(question, mute, callback) {
     rl.question(question, (res) => {
       rl.pause();
       //Redraw input on enter
-      if (muted === true && globalOptions.logOnEnter === 'true') {
+      if (muted && globalOptions.logOnEnter === 'true') {
         process.stdout.clearLine();
         process.stdout.cursorTo(0);
         process.stdout.write(buffer[0]);
@@ -188,7 +191,13 @@ exports.prompt = function(question, mute, callback) {
         process.stdout.write('\n');
       }
       //Back into default state
-      rl.history.shift();
+      if (muted) {
+        rl.history = tempHistory;
+        tempHistory = [];
+      }
+      else {
+        rl.history.shift();
+      }
       buffer = [];
       upCounter = 0;
       leftCounter = 0;

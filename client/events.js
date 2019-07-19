@@ -245,7 +245,7 @@ module.exports = function(socket) {
       sl.log('User not online.');
     }
     else if (data.type === 'error') {
-      sl.log(style.err('Error: ' + data.err.message))
+      sl.log(style.err('Error: ' + data.err));
     }
     else {
       sl.log(style.err('Error: Unknown'));
@@ -355,8 +355,11 @@ module.exports = function(socket) {
   //On deleteRoom
   socket.on('deleteRoom', data => {
     if (data.type === 'success') {
-      sl.log('Room successfully deleted.');
+      delete client.session.log[data.room];
+      client.clear();
+      client.drawLog('home');
       client.home();
+      sl.log(style.success('Room successfully deleted.'));
     }
     else if (data.type === 'wrongPassword') {
       sl.log('The password you entered was wrong. Aborting delete.');
@@ -375,11 +378,14 @@ module.exports = function(socket) {
   //On roomDeleted
   socket.on('roomDeleted', data => {
     if (client.session.activeRoom === data.room) {
-      sl.log(`Room has been deleted.`);
-      client.session.activeRoom = '';
+      sl.log(style.err(`Room has been deleted.`));
+      delete client.session.log[data.room];
+      socket.emit('roomDeleted', {room: data.room, token: client.session.token});
     }
     else {
-      sl.log(`Room '${data.room}' has been deleted.`);
+      sl.log(style.err(`Room '${data.room}' has been deleted.`));
+      delete client.session.log[data.room];
+      socket.emit('roomDeleted', {room: data.room, token: client.session.token});
     }
   });
 

@@ -625,8 +625,8 @@ _,-'     \\_/_|_  |\\   |\`. /   \`._,--===--.__
         process.exit();
       }
       else {
-        sl.log('Command not recognized.');
         login();
+        sl.log(style.err('Command not recognized.'));
       }
     }
     else {
@@ -711,7 +711,6 @@ function home() {
     else if (res === ':check' || res === ':c') {
       Object.keys(session.log).forEach(room => {
         if (room != 'home' && !session.log[room].private) {
-          sl.log(room);
           sl.log(style.ls(`• ${room} (${session.log[room].unread} unread messages)`));
         }
       });

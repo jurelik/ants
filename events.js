@@ -379,7 +379,7 @@ module.exports = function(io) {
               socket.emit('msgInit', {type: 'success', visible: 'public', userList});
             }
             else if (!err && !res) {
-              socket.emit('msgInit', {type: 'error', err: 'Room does not exists.'});
+              socket.emit('msgInit', {type: 'error', err: 'Room does not exist.'});
             }
             else {
               socket.emit('msgInit', {type: 'error', err});
@@ -641,6 +641,18 @@ module.exports = function(io) {
         }
       }) 
     });
+
+    //roomDeleted event
+    socket.on('roomDeleted', data => {
+      server.verifyToken(data, socket.id, (err, decoded) => {
+        if (!err) {
+          socket.allRooms.splice(socket.allRooms.indexOf(data.room), 1);
+        }
+        else {
+          socket.emit('tokenNotValid');
+        }
+      });
+    })
   
     //Change password init event
     socket.on('changePwInit', data => {
