@@ -102,6 +102,7 @@ module.exports = function(io) {
         }
         else {
           socket.emit('tokenNotValid');
+          server.disconnect(socket);
         }
       });
     });
@@ -125,6 +126,7 @@ module.exports = function(io) {
         }
         else {
           socket.emit('tokenNotValid');
+          server.disconnect(socket);
         }
       });
     });
@@ -179,6 +181,7 @@ module.exports = function(io) {
         }
         else {
           socket.emit('tokenNotValid');
+          server.disconnect(socket);
         }
       });
     });
@@ -216,6 +219,7 @@ module.exports = function(io) {
         }
         else {
           socket.emit('tokenNotValid');
+          server.disconnect(socket);
         }
       });
     });
@@ -266,6 +270,7 @@ module.exports = function(io) {
         }
         else {
           socket.emit('tokenNotValid');
+          server.disconnect(socket);
         }
       });
     });
@@ -331,6 +336,7 @@ module.exports = function(io) {
         }
         else {
           socket.emit('tokenNotValid');
+          server.disconnect(socket);
         }
       });
     })
@@ -357,6 +363,7 @@ module.exports = function(io) {
         }
         else {
           socket.emit('tokenNotValid');
+          server.disconnect(socket);
         }
       });
     });
@@ -411,6 +418,7 @@ module.exports = function(io) {
         }
         else {
           socket.emit('tokenNotValid');
+          server.disconnect(socket);
         }
       });
     })
@@ -432,6 +440,7 @@ module.exports = function(io) {
         }
         else {
           socket.emit('tokenNotValid');
+          server.disconnect(socket);
         }
       });
     });
@@ -469,6 +478,7 @@ module.exports = function(io) {
         }
         else {
           socket.emit('tokenNotValid');
+          server.disconnect(socket);
         }
       });
     });
@@ -499,6 +509,7 @@ module.exports = function(io) {
         }
         else {
           socket.emit('tokenNotValid');
+          server.disconnect(socket);
         }
       });
     });
@@ -574,6 +585,7 @@ module.exports = function(io) {
         }
         else {
           socket.emit('tokenNotValid');
+          server.disconnect(socket);
         }
       });
     });
@@ -604,6 +616,7 @@ module.exports = function(io) {
         }
         else {
           socket.emit('tokenNotValid');
+          server.disconnect(socket);
         }
       });
     });
@@ -638,6 +651,7 @@ module.exports = function(io) {
         }
         else {
           socket.emit('tokenNotValid');
+          server.disconnect(socket);
         }
       }) 
     });
@@ -650,6 +664,7 @@ module.exports = function(io) {
         }
         else {
           socket.emit('tokenNotValid');
+          server.disconnect(socket);
         }
       });
     })
@@ -669,6 +684,7 @@ module.exports = function(io) {
         }
         else {
           socket.emit('tokenNotValid');
+          server.disconnect(socket);
         }
       });
     });
@@ -702,6 +718,7 @@ module.exports = function(io) {
         }
         else {
           socket.emit('tokenNotValid');
+          server.disconnect(socket);
         }
       });
     });
@@ -721,6 +738,7 @@ module.exports = function(io) {
         }
         else {
           socket.emit('tokenNotValid');
+          server.disconnect(socket);
         }
       });
     })
@@ -751,12 +769,13 @@ module.exports = function(io) {
         }
         else {
           socket.emit('tokenNotValid');
+          server.disconnect(socket);
         }
       });
     });
   
     //Disconnect event
-    socket.on('disconnect', data => {
+    socket.on('disconnect', () => {
       server.disconnect(socket);
     });
   });

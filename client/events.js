@@ -644,7 +644,7 @@ module.exports = function(socket) {
 
   //On tokenNotValid
   socket.on('tokenNotValid', () => {
-    sl.log(style.err('Token is not valid, please log in again.'));
     client.login();
+    sl.log(style.err('Token is not valid, please log in again.'));
   });
 }
