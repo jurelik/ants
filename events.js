@@ -119,6 +119,9 @@ module.exports = function(io) {
               });
               socket.emit('lsUsers', {type: 'success', userList});
             }
+            else if (!err && !res) {
+              socket.emit('lsUsers', {type: 'roomNotFound'});
+            }
             else {
               socket.emit('lsUsers', {type: 'error', err});
             }
@@ -347,19 +350,29 @@ module.exports = function(io) {
         if (!err) {
           let joined = false;
           //Check if socket is connected to the room
-          socket.allRooms.some(room => {
-            if (room === data.room) {
-              joined = true;
-              return true;
+          Room.findOne({name: data.room}, (err, res) => {
+            if (!err && res) {
+              res.users.some(user => {
+                if (user.name === decoded.name) {
+                  joined = true;
+                  return true;
+                }
+              });
+              if (joined) {
+                socket.emit('switch', {type: 'success', room: data.room});
+                socket.activeRoom = data.room;
+              }
+              else {
+                socket.emit('switch', {type: 'failed'});
+              }
+            }
+            else if (!err && !res) {
+              socket.emit('switch', {type: 'failed'});
+            }
+            else {
+              socket.emit('switch', {type: 'error', err});
             }
           });
-          if (joined) {
-            socket.emit('switch', {type: 'success', room: data.room});
-            socket.activeRoom = data.room;
-          }
-          else {
-            socket.emit('switch', {type: 'failed'});
-          }
         }
         else {
           socket.emit('tokenNotValid');
@@ -376,14 +389,25 @@ module.exports = function(io) {
           //Find all users in room
           Room.findOne({name: socket.activeRoom}, (err, res) => {
             if (!err && res) {
-              res.users.forEach(user => {
-                let userData = {
-                  id: user.id,
-                  pubKey: user.pubKey
-                };
-                userList.push(userData);
-              });
-              socket.emit('msgInit', {type: 'success', visible: 'public', userList});
+              let userFound = false;
+              for (let y = 0; y < res.users.length; y++) {
+                if (res.users[y].name === decoded.name) {
+                  userFound = true;
+                }
+              }
+              if (userFound) {
+                res.users.forEach(user => {
+                  let userData = {
+                    id: user.id,
+                    pubKey: user.pubKey
+                  };
+                  userList.push(userData);
+                });
+                socket.emit('msgInit', {type: 'success', visible: 'public', userList});
+              }
+              else {
+                socket.emit('msgInit', {type: 'roomNotFound', visible: 'public'});
+              } 
             }
             else if (!err && !res) {
               socket.emit('msgInit', {type: 'error', err: 'Room does not exist.'});
@@ -495,10 +519,10 @@ module.exports = function(io) {
               else if (res.private && res.owner != decoded.name) {
                 socket.emit('changeRoomPwInit', {type: 'noPermission'});
               }
-              else if (res.private && res.pw) {
+              else if (res.private && res.pw && res.owner === decoded.name) {
                 socket.emit('changeRoomPwInit', {type: 'checkPw', salt: res.salt});
               }
-              else if (res.private && !res.pw) {
+              else if (res.private && !res.pw && res.owner === decoded.name) {
                 socket.emit('changeRoomPwInit', {type: 'noPw'});
               }
               else {
@@ -523,9 +547,17 @@ module.exports = function(io) {
               res.pw = data.newPw;
               res.salt = data.salt;
 
+              let users = res.users;
+              res.users = [];
+
               res.save(err => {
                 if (!err) {
+                  socket.allRooms.splice(socket.allRooms.indexOf(socket.activeRoom), 1);
+
                   socket.emit('changeRoomPw', {type: 'success'});
+                  users.forEach(user => { //Remove users on password change
+                    socket.to(user.id).emit('changeRoomPw', {type: 'passwordChanged', room: socket.activeRoom});
+                  });
                 }
                 else {
                   socket.emit('changeRoomPw', {type: 'error', err});
@@ -586,6 +618,19 @@ module.exports = function(io) {
         else {
           socket.emit('tokenNotValid');
           server.disconnect(socket);
+        }
+      });
+    });
+
+    //roomPasswordChanged
+    socket.on('roomPasswordChanged', data => {
+      server.verifyToken(data, socket.id, (err, decoded) => {
+        if (!err) {
+          socket.allRooms.splice(socket.allRooms.indexOf(data.room), 1);
+        }
+        else {
+          socket.emit('tokenNotValid');
+          server.disconnect();
         }
       });
     });

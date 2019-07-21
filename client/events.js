@@ -6,8 +6,10 @@ const style = require('./style');
 module.exports = function(socket) {
   //On connect
   socket.on('connect', () => {
+    sl.resume();
     client.login();
   }).on('connect_error', (err) => {
+    sl.resume();
     sl.log("Can't connect to server.");
   });
 
@@ -100,6 +102,9 @@ module.exports = function(socket) {
       data.userList.forEach(user => {
         sl.log(style.ls('• ' + user));
       });
+    }
+    else if (data.type === 'roomNotFound') {
+      sl.log(style.err('You are not connected to this room.'));
     }
     else if (data.type === 'error') {
       sl.log(style.err('Error: ' + data.err.message));
@@ -207,11 +212,11 @@ module.exports = function(socket) {
     }
     else if (data.type === 'failed') {
       sl.log('Please join a room first before using :switch');
-      client.room();
+      client.session.home ? client.home() : client.room();
     }
     else {
       sl.log('Error: Unknown');
-      client.room();
+      client.session.home ? client.home() : client.room();
     }
   });
 
@@ -243,6 +248,9 @@ module.exports = function(socket) {
     }
     else if (data.type === 'userNotOnline' && data.visible === 'private') {
       sl.log('User not online.');
+    }
+    else if (data.type === 'roomNotFound' && data.visible === 'public') {
+      sl.log(style.err('You are not connected to this room.'));
     }
     else if (data.type === 'error') {
       sl.log(style.err('Error: ' + data.err));
@@ -599,29 +607,44 @@ module.exports = function(socket) {
   //On changeRoomPw
   socket.on('changeRoomPw', data => {
     if (data.type === 'success') {
-      sl.log('Password successfully changed.');
-      client.room();
+      delete client.session.log[data.room];
+      client.clear();
+      client.drawLog('home');
+      client.home();
+      sl.log(style.success('Password successfully changed.'));
+    }
+    else if (data.type === 'passwordChanged') {
+      if (client.session.activeRoom === data.room) {
+        sl.log(style.err(`The room password has changed.`));
+        delete client.session.log[data.room];
+        socket.emit('roomPasswordChanged', {room: data.room, token: client.session.token});
+      }
+      else {
+        sl.log(style.err(`Room '${data.room}' has had its password changed.`));
+        delete client.session.log[data.room];
+        socket.emit('roomPasswordChanged', {room: data.room, token: client.session.token});
+      }
     }
     else if (data.type === 'wrongPw') {
-      sl.log('Old password you entered is wrong. Aborting password change.');
+      sl.log(style.err('Old password you entered is wrong. Aborting password change.'));
       client.room();
     }
     else if (data.type === 'error') {
       if (data.err) {
-        sl.log('Error: ' + data.err.message);
+        sl.log(style.err('Error: ' + data.err.message));
         client.room();
       }
       else {
-        sl.log('Something went wrong.');
+        sl.log(style.err('Something went wrong.'));
         client.room();
       }
     }
     else if (data.type === 'public') {
-      sl.log(`Public rooms can't have a password.`);
+      sl.log(style.err(`Public rooms can't have a password.`));
       client.room();
     }
     else {
-      sl.log('Error: Unknown');
+      sl.log(style.err('Error: Unknown'));
       client.room();
     }
   });

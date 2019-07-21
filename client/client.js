@@ -568,7 +568,6 @@ const events = require('./events')(socket);
 
 //Login
 function login() {
-  sl.resume();
   setTitle('ants');
   if (session.connected === false) {
     for (let x = 0; x < process.stdout.rows - 18; x++) {
