@@ -468,6 +468,52 @@ module.exports = function(io) {
         }
       });
     });
+
+    //Kick user event
+    socket.on('kick', data => {
+      server.verifyToken(data, socket.id, (err, decoded) => {
+        if (!err) {
+          Room.findOne({name: socket.activeRoom}, (err, res) => {
+            if (!err && res && res.owner === decoded.name) {
+              let userFound = false;
+              let userIndex;
+              res.users.some(user => {
+                if (user.name === data.user) {
+                  userFound = true;
+                  userIndex = res.users.indexOf(user);
+                  return true;
+                }
+              });
+
+              if (userFound) {
+                res.users.splice(res.users.indexOf(userIndex), 1);
+                res.save(err => {
+                  if (!err) {
+                    socket.emit('kick', {type: 'success', user: data.user});
+                  }
+                });
+              }
+              else {
+                socket.emit('kick', {type: 'userNotFound'});
+              }
+            }
+            else if (!err && res && res.owner != decoded.name) {
+              socket.emit('kick', {type: 'noPermission'});
+            }
+            else if (!err && !res) {
+              socket.emit('kick', {type: 'roomNotFound'});
+            }
+            else {
+              socket.emit('kick', {type: 'error', err});
+            }
+          });
+        }
+        else {
+          socket.emit('tokenNotValid');
+          server.disconnect(socket);
+        }
+      });
+    });
   
     //Welcome message set event
     socket.on('welcome', data => {

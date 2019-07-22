@@ -310,6 +310,28 @@ module.exports = function(socket) {
     }
   });
 
+  //On kick
+  socket.on('kick', data => {
+    if (data.type === 'success') {
+      sl.log(style.success(`${data.user} has been kicked from the room.`));
+    }
+    else if (data.type === 'noPermission') {
+      sl.log(style.err(`You don't have permission to kick users in this room.`));
+    }
+    else if (data.type === 'userNotFound') {
+      sl.log(style.err('User is currently not active in the room.'));
+    }
+    else if (data.type === 'roomNotFound') {
+      sl.log(style.err('Room not found.'));
+    }
+    else if (data.type === 'error') {
+      sl.log(style.err('Error: ' + data.err));
+    }
+    else {
+      sl.log(style.err('Error: Unknown'));
+    }
+  });
+
   //On deleteRoomInit
   socket.on('deleteRoomInit', data => {
     if (data.type === 'success') {

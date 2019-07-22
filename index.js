@@ -120,21 +120,30 @@ function disconnect(socket) {
   socket.allRooms.forEach(room => {
     Room.findOne({name: room}, (err, res) => {
       if (!err && res) {
-        for (let x = 0; x < res.users.length; x++) {
-          if (res.users[x].name === socket.username) {
-            res.users.splice(x, 1);
-            x--;
-            res.save(err => {
-              if (err && err.message.startsWith('No matching document found for id')) {
-                disconnect(socket);
-              }
-              else if (err && !err.message.startsWith('No matching document found for id')) {
-                sl.log(err.message);
-              }
-            });
+        let userJoined = false;
+        res.users.some(user => {
+          if (user.name === socket.username) {
+            userJoined = true;
+            return true;
           }
-          else {
-            socket.to(res.users[x].id).emit('msg', {type: 'userLeft', msg: `${socket.username} left the room.`, room});
+        });
+        if (userJoined) {
+          for (let x = 0; x < res.users.length; x++) {
+            if (res.users[x].name === socket.username) {
+              res.users.splice(x, 1);
+              x--;
+              res.save(err => {
+                if (err && err.message.startsWith('No matching document found for id')) {
+                  disconnect(socket);
+                }
+                else if (err && !err.message.startsWith('No matching document found for id')) {
+                  sl.log(err.message);
+                }
+              });
+            }
+            else {
+              socket.to(res.users[x].id).emit('msg', {type: 'userLeft', msg: `${socket.username} left the room.`, room});
+            }
           }
         }
       }
