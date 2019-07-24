@@ -314,6 +314,27 @@ module.exports = function(socket) {
   socket.on('kick', data => {
     if (data.type === 'success') {
       sl.log(style.success(`${data.user} has been kicked from the room.`));
+      client.addToLog(data.room, style.success(`${data.user} has been kicked from the room.`), true);
+    }
+    else if (data.type === 'youKicked') {
+      delete client.session.log[data.room];
+      socket.emit('forcedLeave', {room: data.room, token: client.session.token});
+
+      if (client.session.activeRoom === data.room) {
+        sl.log(style.err('You have been kicked from the room.'));
+      }
+      else {
+        sl.log(style.err(`You have been kicked from room '${data.room}'`));
+      }
+    }
+    else if (data.type === 'userKicked') {
+      if (client.session.activeRoom === data.room) {
+        sl.log(style.err(`${data.user} has been kicked from the room.`));
+        client.addToLog(data.room, style.err(`${data.user} has been kicked from the room.`), true);
+      }
+      else {
+        client.addToLog(data.room, style.err(`${data.user} has been kicked from the room.`), false);
+      }
     }
     else if (data.type === 'noPermission') {
       sl.log(style.err(`You don't have permission to kick users in this room.`));
@@ -639,12 +660,12 @@ module.exports = function(socket) {
       if (client.session.activeRoom === data.room) {
         sl.log(style.err(`The room password has changed.`));
         delete client.session.log[data.room];
-        socket.emit('roomPasswordChanged', {room: data.room, token: client.session.token});
+        socket.emit('forcedLeave', {room: data.room, token: client.session.token});
       }
       else {
         sl.log(style.err(`Room '${data.room}' has had its password changed.`));
         delete client.session.log[data.room];
-        socket.emit('roomPasswordChanged', {room: data.room, token: client.session.token});
+        socket.emit('forcedLeave', {room: data.room, token: client.session.token});
       }
     }
     else if (data.type === 'wrongPw') {

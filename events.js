@@ -477,19 +477,27 @@ module.exports = function(io) {
             if (!err && res && res.owner === decoded.name) {
               let userFound = false;
               let userIndex;
-              res.users.some(user => {
+              let userID;
+
+              res.users.forEach(user => {
                 if (user.name === data.user) {
                   userFound = true;
                   userIndex = res.users.indexOf(user);
-                  return true;
+                  userID = user.id;
                 }
               });
 
               if (userFound) {
-                res.users.splice(res.users.indexOf(userIndex), 1);
+                res.users.splice(userIndex, 1);
                 res.save(err => {
                   if (!err) {
-                    socket.emit('kick', {type: 'success', user: data.user});
+                    socket.emit('kick', {type: 'success', user: data.user, room: socket.activeRoom});
+                    socket.to(userID).emit('kick', {type: 'youKicked', room: socket.activeRoom});
+                    res.users.forEach(user => {
+                      if (user.name != decoded.name) {
+                        socket.to(user.id).emit('kick', {type: 'userKicked', user: data.user, room: socket.activeRoom});
+                      }
+                    });
                   }
                 });
               }
@@ -668,8 +676,8 @@ module.exports = function(io) {
       });
     });
 
-    //roomPasswordChanged
-    socket.on('roomPasswordChanged', data => {
+    //forcedLeave
+    socket.on('forcedLeave', data => {
       server.verifyToken(data, socket.id, (err, decoded) => {
         if (!err) {
           socket.allRooms.splice(socket.allRooms.indexOf(data.room), 1);
