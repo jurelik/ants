@@ -355,6 +355,11 @@ function room() {
         socket.emit('kick', {user, token: session.token});
         room();
       }
+      else if (res.startsWith(':ban ')) {
+        let user = res.slice(5);
+        socket.emit('ban', {user, token: session.token});
+        room();
+      }
       else if (res.startsWith(':welcome ')) {
         let msg = res.slice(9);
         socket.emit('welcome', {msg, token: session.token});

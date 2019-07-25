@@ -353,6 +353,52 @@ module.exports = function(socket) {
     }
   });
 
+  //On ban
+  socket.on('ban', data => {
+    if (data.type === 'success') {
+      sl.log(style.success(`${data.user} has been banned from the room.`));
+      client.addToLog(data.room, style.success(`${data.user} has been banned from the room.`), true);
+    }
+    else if (data.type === 'youBanned') {
+      delete client.session.log[data.room];
+      socket.emit('forcedLeave', {room: data.room, token: client.session.token});
+
+      if (client.session.activeRoom === data.room) {
+        sl.log(style.err('You have been banned from the room.'));
+      }
+      else {
+        sl.log(style.err(`You have been banned from room '${data.room}'`));
+      }
+    }
+    else if (data.type === 'userBanned') {
+      if (client.session.activeRoom === data.room) {
+        sl.log(style.err(`${data.user} has been banned from the room.`));
+        client.addToLog(data.room, style.err(`${data.user} has been banned from the room.`), true);
+      }
+      else {
+        client.addToLog(data.room, style.err(`${data.user} has been banned from the room.`), false);
+      }
+    }
+    else if (data.type === 'userBannedAlready') {
+      sl.log(style.err('User is banned already.'));
+    }
+    else if (data.type === 'noPermission') {
+      sl.log(style.err(`You don't have permission to ban users in this room.`));
+    }
+    else if (data.type === 'userNotFound') {
+      sl.log(style.err('User does not exist.'));
+    }
+    else if (data.type === 'roomNotFound') {
+      sl.log(style.err('Room not found.'));
+    }
+    else if (data.type === 'error') {
+      sl.log(style.err('Error: ' + data.err));
+    }
+    else {
+      sl.log(style.err('Error: Unknown'));
+    }
+  });
+
   //On deleteRoomInit
   socket.on('deleteRoomInit', data => {
     if (data.type === 'success') {

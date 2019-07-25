@@ -522,6 +522,89 @@ module.exports = function(io) {
         }
       });
     });
+
+    //Ban user event
+    socket.on('ban', data => {
+      server.verifyToken(data, socket.id, (err, decoded) => {
+        if (!err) {
+          Room.findOne({name: socket.activeRoom}, (err, res) => {
+            if (!err && res && res.owner === decoded.name) {
+              let userExists = false;
+              let userActive = false;
+              let userBannedAlready = false;
+              let userIndex;
+              let userID;
+              let room = res;
+
+              User.findOne({name: data.user}, (err, res) => { //Check if user exists
+                if (!err && res) {
+                  userExists = true;
+                  userID = res.id;
+
+                  if (userExists) {
+                    room.users.some(user => { //Check if user is connected to the room
+                      if (user.name === data.user) {
+                        userActive = true;
+                        userIndex = room.users.indexOf(user);
+                        return true;
+                      }
+                    });
+    
+                    room.ban.some(user => { //Check if user is banned already
+                      if (user === data.user) {
+                        userBannedAlready = true;
+                        return true;
+                      }
+                    });
+      
+                    if (!userBannedAlready) {
+                      room.ban.push(data.user);
+                      if (userActive) {
+                        room.users.splice(userIndex, 1);
+                      }
+      
+                      room.save(err => {
+                        if (!err) {
+                          socket.emit('ban', {type: 'success', user: data.user, room: socket.activeRoom});
+                          socket.to(userID).emit('ban', {type: 'youBanned', room: socket.activeRoom});
+                          room.users.forEach(user => {
+                            if (user.name != decoded.name) {
+                              socket.to(user.id).emit('ban', {type: 'userBanned', user: data.user, room: socket.activeRoom});
+                            }
+                          });
+                        }
+                        else {
+                          socket.emit('ban', {type: 'error', err});
+                        }
+                      });
+                    }
+                    else {
+                      socket.emit('ban', {type: 'userBannedAlready'});
+                    }
+                  }
+                  else {
+                    socket.emit('ban', {type: 'userNotFound'});
+                  }
+                }
+              });
+            }
+            else if (!err && res && res.owner != decoded.name) {
+              socket.emit('ban', {type: 'noPermission'});
+            }
+            else if (!err && !res) {
+              socket.emit('ban', {type: 'roomNotFound'});
+            }
+            else {
+              socket.emit('ban', {type: 'error', err});
+            }
+          });
+        }
+        else {
+          socket.emit('tokenNotValid');
+          server.disconnect(socket);
+        }
+      });
+    });
   
     //Welcome message set event
     socket.on('welcome', data => {
