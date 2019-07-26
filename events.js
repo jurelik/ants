@@ -739,6 +739,50 @@ module.exports = function(io) {
         }
       });
     });
+
+    //Unmute user event
+    socket.on('unmute', data => {
+      server.verifyToken(data, socket.id, (err, decoded) => {
+        if (!err) {
+          User.findOne({name: decoded.name}, (err, res) => {
+            if (!err && res) {
+              let userMuted = false;
+
+              res.mute.some(user => {
+                if (user === data.user) {
+                  userMuted = true;
+                  return true;
+                }
+              });
+
+              if (userMuted) {
+                res.mute.splice(res.mute.indexOf(data.user), 1);
+
+                res.save(err => {
+                  if (!err) {
+                    socket.emit('unmute', {type: 'success', user: data.user});
+                  }
+                  else {
+                    socket.emit('unmute', {type: 'error'});
+                  }
+                });
+              }
+              else {
+                socket.emit('unmute', {type: 'userNotMuted'});
+              }
+            }
+            else {
+              socket.emit('unmute', {type: 'error'});
+            }
+          });
+        }
+        else {
+          socket.emit('tokenNotValid');
+          server.disconnect(socket);
+        }
+      });
+    });
+
     //Welcome message set event
     socket.on('welcome', data => {
       server.verifyToken(data, socket.id, (err, decoded) => {

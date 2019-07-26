@@ -242,6 +242,11 @@ function home() {
       socket.emit('mute', {user, token: session.token});
       home();
     }
+    else if (res.startsWith(':unmute ')) {
+      let user = res.slice(8);
+      socket.emit('unmute', {user, token: session.token});
+      home();
+    }
     else if (res === ':changepw') {
       socket.emit('changePwInit', {token: session.token});
     }
@@ -374,6 +379,11 @@ function room() {
         let user = res.slice(6);
         socket.emit('mute', {user, token: session.token});
         room();
+      }
+      else if (res.startsWith(':unmute ')) {
+        let user = res.slice(8);
+        socket.emit('unmute', {user, token: session.token});
+        home();
       }
       else if (res.startsWith(':welcome ')) {
         let msg = res.slice(9);

@@ -435,13 +435,29 @@ module.exports = function(socket) {
   //On mute
   socket.on('mute', data => {
     if (data.type === 'success') {
-      sl.log(style.success(`${data.user} successfully muted.`));
+      sl.log(style.success(`'${data.user}' successfully muted.`));
     }
     else if (data.type === 'userNotFound') {
       sl.log(style.err('User not found.'));
     }
     else if (data.type === 'alreadyMuted') {
       sl.log(style.err('User already muted.'));
+    }
+    else if (data.type === 'error') {
+      sl.log(style.err('Error'));
+    }
+    else {
+      sl.log(style.err('Error: Unknown'));
+    }
+  });
+
+  //On unmute
+  socket.on('unmute', data => {
+    if (data.type === 'success') {
+      sl.log(style.success(`'${data.user}' successfully unmuted.`));
+    }
+    else if (data.type === 'userNotMuted') {
+      sl.log(style.err('User is not muted.'));
     }
     else if (data.type === 'error') {
       sl.log(style.err('Error'));
