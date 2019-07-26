@@ -237,6 +237,11 @@ function home() {
 • :q - exit ants`);
       home();
     }
+    else if (res.startsWith(':mute ')) {
+      let user = res.slice(6);
+      socket.emit('mute', {user, token: session.token});
+      home();
+    }
     else if (res === ':changepw') {
       socket.emit('changePwInit', {token: session.token});
     }
@@ -363,6 +368,11 @@ function room() {
       else if (res.startsWith(':unban ')) {
         let user = res.slice(7);
         socket.emit('unban', {user, token: session.token});
+        room();
+      }
+      else if (res.startsWith(':mute ')) {
+        let user = res.slice(6);
+        socket.emit('mute', {user, token: session.token});
         room();
       }
       else if (res.startsWith(':welcome ')) {

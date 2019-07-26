@@ -253,6 +253,9 @@ module.exports = function(socket) {
     else if (data.type === 'userNotOnline' && data.visible === 'private') {
       sl.log('User not online.');
     }
+    else if (data.type === 'muted' && data.visible === 'private') {
+      sl.log(style.err('You have been muted by this user.'));
+    }
     else if (data.type === 'roomNotFound' && data.visible === 'public') {
       sl.log(style.err('You are not connected to this room.'));
     }
@@ -423,6 +426,25 @@ module.exports = function(socket) {
     }
     else if (data.type === 'error') {
       sl.log(style.err('Error: ' + data.err));
+    }
+    else {
+      sl.log(style.err('Error: Unknown'));
+    }
+  });
+
+  //On mute
+  socket.on('mute', data => {
+    if (data.type === 'success') {
+      sl.log(style.success(`${data.user} successfully muted.`));
+    }
+    else if (data.type === 'userNotFound') {
+      sl.log(style.err('User not found.'));
+    }
+    else if (data.type === 'alreadyMuted') {
+      sl.log(style.err('User already muted.'));
+    }
+    else if (data.type === 'error') {
+      sl.log(style.err('Error'));
     }
     else {
       sl.log(style.err('Error: Unknown'));

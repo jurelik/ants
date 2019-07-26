@@ -437,12 +437,26 @@ module.exports = function(io) {
           //Find user
           User.findOne({name: data.dest}, (err, res) => {
             if (!err && res && res.online) {
-              let userData = {
-                id: res.id,
-                pubKey: res.pubKey
+              let muted = false;
+
+              res.mute.some(user => {
+                if (user === decoded.name) {
+                  muted = true;
+                  return true;
+                }
+              });
+
+              if (!muted) {
+                let userData = {
+                  id: res.id,
+                  pubKey: res.pubKey
+                }
+                userList.push(userData);
+                socket.emit('msgInit', {type: 'success', visible: 'private', userList});
               }
-              userList.push(userData);
-              socket.emit('msgInit', {type: 'success', visible: 'private', userList});
+              else {
+                socket.emit('msgInit', {type: 'muted', visible: 'private'});
+              }
             }
             else if (!err && res && !res.online) {
               socket.emit('msgInit', {type: 'userNotOnline', visible: 'private'});
@@ -673,6 +687,58 @@ module.exports = function(io) {
       });
     });
   
+    //Mute user event
+    socket.on('mute', data => {
+      server.verifyToken(data, socket.id, (err, decoded) => {
+        if (!err) {
+          User.findOne({name: decoded.name}, (err, res) => {
+            if (!err && res) {
+              let alreadyMuted = false;
+              let me = res;
+
+              res.mute.some(user => {
+                if (user === data.user) {
+                  alreadyMuted = true;
+                  return true;
+                }
+              });
+
+              if (!alreadyMuted) {
+                User.findOne({name: data.user}, (err, res) => {
+                  if (!err && res) {
+                    me.mute.push(data.user);
+                    me.save(err => {
+                      if (!err) {
+                        socket.emit('mute', {type: 'success', user: data.user});
+                      }
+                      else {
+                        socket.emit('mute', {type: 'error'});
+                      }
+                    });
+                  }
+                  else if (!err && !res) {
+                    socket.emit('mute', {type: 'userNotFound'});
+                  }
+                  else {
+                    socket.emit('mute', {type: 'error'});
+                  }
+                });
+              }
+              else {
+                socket.emit('mute', {type: 'alreadyMuted'});
+              }
+            }
+            else {
+              socket.emit('mute', {type: 'error'});
+            }
+          });
+        }
+        else {
+          socket.emit('tokenNotValid');
+          server.disconnect(socket);
+        }
+      });
+    });
     //Welcome message set event
     socket.on('welcome', data => {
       server.verifyToken(data, socket.id, (err, decoded) => {

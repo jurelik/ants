@@ -8,7 +8,8 @@ const UserSchema = new Schema({
   id: String,
   salt: String,
   online: Boolean,
-  pubKey: {}
+  pubKey: String,
+  mute: Array
 });
 
 const User = mongoose.model('user', UserSchema);
