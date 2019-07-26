@@ -146,6 +146,10 @@ module.exports = function(socket) {
       sl.log('The password you entered is wrong.');
       client.session.home ? client.home() : client.room();
     }
+    else if (data.type === 'banned') {
+      sl.log(style.err(`Failed to join: You are banned from room '${data.room}'`));
+      client.session.home ? client.home() : client.room();
+    }
     else if (data.type === 'notFound') {
       sl.log('Room not found');
       client.session.home ? client.home() : client.room();
@@ -382,11 +386,37 @@ module.exports = function(socket) {
     else if (data.type === 'userBannedAlready') {
       sl.log(style.err('User is banned already.'));
     }
+    else if (data.type === 'banYourself') {
+      sl.log(style.err(`You can't ban yourself.`));
+    }
     else if (data.type === 'noPermission') {
       sl.log(style.err(`You don't have permission to ban users in this room.`));
     }
     else if (data.type === 'userNotFound') {
       sl.log(style.err('User does not exist.'));
+    }
+    else if (data.type === 'roomNotFound') {
+      sl.log(style.err('Room not found.'));
+    }
+    else if (data.type === 'error') {
+      sl.log(style.err('Error: ' + data.err));
+    }
+    else {
+      sl.log(style.err('Error: Unknown'));
+    }
+  });
+
+  //On unban
+  socket.on('unban', data => {
+    if (data.type === 'success') {
+      sl.log(style.success(`${data.user} has been unbanned.`));
+      client.addToLog(data.room, style.success(`${data.user} has been banned from the room.`), true);
+    }
+    else if (data.type === 'userNotBanned') {
+      sl.log(style.err('User is currently not banned.'));
+    }
+    else if (data.type === 'noPermission') {
+      sl.log(style.err(`You don't have permission to unban users in this room.`));
     }
     else if (data.type === 'roomNotFound') {
       sl.log(style.err('Room not found.'));

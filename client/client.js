@@ -360,6 +360,11 @@ function room() {
         socket.emit('ban', {user, token: session.token});
         room();
       }
+      else if (res.startsWith(':unban ')) {
+        let user = res.slice(7);
+        socket.emit('unban', {user, token: session.token});
+        room();
+      }
       else if (res.startsWith(':welcome ')) {
         let msg = res.slice(9);
         socket.emit('welcome', {msg, token: session.token});
