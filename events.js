@@ -148,18 +148,18 @@ module.exports = function(io) {
           });
           if (!joined) { //If not joined yet
             Room.findOne({name: data.room}, (err, res) => {
-              let banned = false;
+              if (!err && res && !res.private) {
+                let banned = false;
 
-              //Check if user is banned
-              res.ban.some(user => {
-                if (user === decoded.name) {
-                  banned = true;
-                  return true;
-                }
-              });
+                //Check if user is banned
+                res.ban.some(user => {
+                  if (user === decoded.name) {
+                    banned = true;
+                    return true;
+                  }
+                });
 
-              if(!banned) {
-                if (!err && res && !res.private) {
+                if (!banned) {
                   socket.activeRoom = data.room; //Change activeRoom
                   socket.allRooms.push(data.room); //Add to list of all the rooms this socket has joined so far
                   res.users.forEach(user => {
@@ -175,21 +175,51 @@ module.exports = function(io) {
                     }
                   });
                 }
-                else if (!err && res && res.private && res.pw) {
-                  socket.emit('join', {type: 'private', room: data.room, pw: true, salt: res.salt});
-                }
-                else if (!err && res && res.private && !res.pw) {
-                  socket.emit('join', {type: 'private', room: data.room, pw: false});
-                }
-                else if (!err && !res) {
-                  socket.emit('join', {type: 'notFound'})
-                }
                 else {
-                  socket.emit('join', {type: 'error', err})
+                  socket.emit('join', {type: 'banned', room: data.room});
                 }
               }
+              else if (!err && res && res.private && res.pw) {
+                let banned = false;
+
+                //Check if user is banned
+                res.ban.some(user => {
+                  if (user === decoded.name) {
+                    banned = true;
+                    return true;
+                  }
+                });
+
+                if (!banned) {
+                  socket.emit('join', {type: 'private', room: data.room, pw: true, salt: res.salt});
+                }
+                else {
+                  socket.emit('join', {type: 'banned', room: data.room});
+                }
+              }
+              else if (!err && res && res.private && !res.pw) {
+                let banned = false;
+
+                //Check if user is banned
+                res.ban.some(user => {
+                  if (user === decoded.name) {
+                    banned = true;
+                    return true;
+                  }
+                });
+
+                if (!banned) {
+                  socket.emit('join', {type: 'private', room: data.room, pw: false});
+                }
+                else {
+                  socket.emit('join', {type: 'banned', room: data.room});
+                }
+              }
+              else if (!err && !res) {
+                socket.emit('join', {type: 'notFound'})
+              }
               else {
-                socket.emit('join', {type: 'banned', room: data.room});
+                socket.emit('join', {type: 'error', err})
               }
             });
           }
@@ -567,53 +597,53 @@ module.exports = function(io) {
 
               User.findOne({name: data.user}, (err, res) => { //Check if user exists
                 if (!err && res) {
-                  userExists = true;
                   userID = res.id;
 
-                  if (userExists) {
-                    room.users.some(user => { //Check if user is connected to the room
-                      if (user.name === data.user) {
-                        userActive = true;
-                        userIndex = room.users.indexOf(user);
-                        return true;
-                      }
-                    });
+                  room.users.some(user => { //Check if user is connected to the room
+                    if (user.name === data.user) {
+                      userActive = true;
+                      userIndex = room.users.indexOf(user);
+                      return true;
+                    }
+                  });
+  
+                  room.ban.some(user => { //Check if user is banned already
+                    if (user === data.user) {
+                      userBannedAlready = true;
+                      return true;
+                    }
+                  });
     
-                    room.ban.some(user => { //Check if user is banned already
-                      if (user === data.user) {
-                        userBannedAlready = true;
-                        return true;
+                  if (!userBannedAlready) {
+                    room.ban.push(data.user);
+                    if (userActive) {
+                      room.users.splice(userIndex, 1);
+                    }
+    
+                    room.save(err => {
+                      if (!err) {
+                        socket.emit('ban', {type: 'success', user: data.user, room: socket.activeRoom});
+                        socket.to(userID).emit('ban', {type: 'youBanned', room: socket.activeRoom});
+                        room.users.forEach(user => {
+                          if (user.name != decoded.name) {
+                            socket.to(user.id).emit('ban', {type: 'userBanned', user: data.user, room: socket.activeRoom});
+                          }
+                        });
+                      }
+                      else {
+                        socket.emit('ban', {type: 'error', err});
                       }
                     });
-      
-                    if (!userBannedAlready) {
-                      room.ban.push(data.user);
-                      if (userActive) {
-                        room.users.splice(userIndex, 1);
-                      }
-      
-                      room.save(err => {
-                        if (!err) {
-                          socket.emit('ban', {type: 'success', user: data.user, room: socket.activeRoom});
-                          socket.to(userID).emit('ban', {type: 'youBanned', room: socket.activeRoom});
-                          room.users.forEach(user => {
-                            if (user.name != decoded.name) {
-                              socket.to(user.id).emit('ban', {type: 'userBanned', user: data.user, room: socket.activeRoom});
-                            }
-                          });
-                        }
-                        else {
-                          socket.emit('ban', {type: 'error', err});
-                        }
-                      });
-                    }
-                    else {
-                      socket.emit('ban', {type: 'userBannedAlready'});
-                    }
                   }
                   else {
-                    socket.emit('ban', {type: 'userNotFound'});
+                    socket.emit('ban', {type: 'userBannedAlready'});
                   }
+                }
+                else if (!err && !res) {
+                  socket.emit('ban', {type: 'userNotFound'});
+                }
+                else {
+                  socket.emit('ban', {type: 'error', err});
                 }
               });
             }
