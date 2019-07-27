@@ -23,6 +23,7 @@ module.exports = {
   register,
   home,
   room,
+  privateRoom,
   addToLog,
   drawLog,
   hashLoginPassword,
@@ -31,6 +32,7 @@ module.exports = {
   generateRSAKeyPair,
   createRoom,
   setTitle,
+  returnToScreen,
   clear
 };
 
@@ -156,7 +158,7 @@ _,-'     \\_/_|_  |\\   |\`. /   \`._,--===--.__
 
 //Home
 function home() {
-  session.home = true;
+  session.activeScreen = 'home';
   session.activeRoom = 'home';
   setTitle('home');
   sl.prompt('', false, res => {
@@ -187,6 +189,10 @@ function home() {
     else if (res.startsWith(':s ')) {
       let _room = res.slice(3);
       socket.emit('switch', {room: _room, token: session.token});
+    }
+    else if (res.startsWith(':pc ')) {
+      let user = res.slice(4);
+      socket.emit('privateChat', {user, token: session.token});
     }
     else if (res === ':check' || res === ':c') {
       Object.keys(session.log).forEach(room => {
@@ -278,7 +284,7 @@ function home() {
 
 //Room
 function room() {
-  session.home = false;
+  session.activeScreen = 'room';
   setTitle(session.activeRoom);
   sl.prompt('', res => {
     if (res.startsWith(':')) {
@@ -313,8 +319,12 @@ function room() {
         sl.addToHistory(`:p ${user} `);
         session.msg = msg;
         session.to = user;
-        socket.emit('msgInit', {dest: user, visible: 'private', token: session.token})
+        socket.emit('msgInit', {dest: user, visible: 'private', token: session.token});
         room();
+      }
+      else if (res.startsWith(':pc ')) {
+        let user = res.slice(4);
+        socket.emit('privateChat', {user, token: session.token});
       }
       else if (res === ':home') {
         clear();
@@ -409,6 +419,73 @@ function room() {
   })
 };
 
+//Private room
+function privateRoom() {
+  session.activeScreen = 'privateRoom';
+  setTitle(session.activeRoom);
+  sl.prompt('', res => {
+    if (res.startsWith(':join ')) {
+      let room = res.slice(6);
+      socket.emit('join', {room, user: session.user, token: session.token});
+    }
+    else if (res === ':check' || res === ':c') {
+      Object.keys(session.log).forEach(room => {
+        if (room != 'home' && !session.log[room].private) {
+          sl.log(style.ls(`• ${room} (${session.log[room].unread} unread messages)`));
+        }
+      });
+      privateRoom();
+    }
+    else if (res.startsWith(':switch ')) {
+      let _room = res.slice(8);
+      socket.emit('switch', {room: _room, token: session.token});
+    }
+    else if (res.startsWith(':s ')) {
+      let _room = res.slice(3);
+      socket.emit('switch', {room: _room, token: session.token});
+    }
+    else if (res.startsWith(':p ')) {
+      let array = res.split(' ');
+      let user = array[1];
+      let msg = array.slice(2).join(' ');
+      sl.addToHistory(`:p ${user} `);
+      session.msg = msg;
+      session.to = user;
+      socket.emit('msgInit', {dest: user, visible: 'private', token: session.token});
+      privateRoom();
+    }
+    else if (res.startsWith(':pc ')) {
+      let user = res.slice(4);
+      socket.emit('privateChat', {user, token: session.token});
+    }
+    else if (res === ':home') {
+      clear();
+      drawLog('home');
+      home();
+    }
+    else if (res === ':q' || res === ':Q') {
+      sl.log('Shutting down.');
+      process.exit();
+    }
+    else if (res.startsWith(':mute ')) {
+      let user = res.slice(6);
+      socket.emit('mute', {user, token: session.token});
+      room();
+    }
+    else if (res.startsWith(':unmute ')) {
+      let user = res.slice(8);
+      socket.emit('unmute', {user, token: session.token});
+      home();
+    }
+    else {
+      session.msg = res;
+      session.to = session.activeRoom;
+      socket.emit('msgInit', {dest: session.activeRoom, visible: 'private', token: session.token});
+      privateRoom();
+    }
+  });
+}
+
 //Add message to log
 function addToLog(room, msg, active) {
   if (session.log[room] && active) {
@@ -429,7 +506,6 @@ function addToLog(room, msg, active) {
 
 //Draw log
 function drawLog(room) {
-  clear();
   session.log[room].msg.forEach(msg => {
     sl.log(msg);
   });
@@ -478,7 +554,7 @@ function hashRoomPassword(data) {
       }
       else {
         sl.log('Error: ' + err);
-        session.home ? home() : room();
+        returnToScreen();
       }
     });
   });
@@ -561,6 +637,23 @@ function setTitle(title)
   process.stdout.write(
     String.fromCharCode(27) + "]0;" + title + String.fromCharCode(7)
   );
+}
+
+//Return to previous screen
+function returnToScreen() {
+  if (session.activeScreen === 'home') {
+    home();
+  }
+  else if (session.activeScreen === 'room') {
+    room();
+  }
+  else if (session.activeScreen === 'privateRoom') {
+    privateRoom();
+  }
+  else {
+    home();
+    sl.log(style.err('Error'));
+  }
 }
 
 //Clear screen

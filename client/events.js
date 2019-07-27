@@ -140,27 +140,27 @@ module.exports = function(socket) {
     }
     else if (data.type === 'alreadyJoined') {
       sl.log('Room already joined, please use :switch to switch between rooms.');
-      client.session.home ? client.home() : client.room();
+      client.returnToScreen();
     }
     else if (data.type === 'wrongPassword') {
       sl.log('The password you entered is wrong.');
-      client.session.home ? client.home() : client.room();
+      client.returnToScreen();
     }
     else if (data.type === 'banned') {
       sl.log(style.err(`Failed to join: You are banned from room '${data.room}'`));
-      client.session.home ? client.home() : client.room();
+      client.returnToScreen();
     }
     else if (data.type === 'notFound') {
       sl.log('Room not found');
-      client.session.home ? client.home() : client.room();
+      client.returnToScreen();
     }
     else if (data.type === 'error') {
       sl.log(style.err('Error: ' + data.err.message));
-      client.session.home ? client.home() : client.room();
+      client.returnToScreen();
     }
     else {
       sl.log(style.err('Error: Unknown'));
-      client.session.home ? client.home() : client.room();
+      client.returnToScreen();
     }
   });
 
@@ -175,15 +175,15 @@ module.exports = function(socket) {
     }
     else if (data.type === 'roomNotFound') {
       sl.log(`You can't leave a room you never joined.`);
-      client.session.home ? client.home() : client.room();
+      client.returnToScreen();
     }
     else if (data.type === 'error') {
       sl.log('Error: ' + data.err.message);
-      client.session.home ? client.home() : client.room();
+      client.returnToScreen();
     }
     else {
       sl.log(style.err('Error: Unknown'));
-      client.session.home ? client.home() : client.room();
+      client.returnToScreen();
     }
   });
 
@@ -209,6 +209,7 @@ module.exports = function(socket) {
   //On switch
   socket.on('switch', data => {
     if (data.type === 'success') {
+      client.clear();
       client.drawLog(data.room);
       client.session.activeRoom = data.room;
       client.session.log[data.room].unread = 0;
@@ -216,11 +217,34 @@ module.exports = function(socket) {
     }
     else if (data.type === 'failed') {
       sl.log('Please join a room first before using :switch');
-      client.session.home ? client.home() : client.room();
+      client.returnToScreen();
     }
     else {
       sl.log('Error: Unknown');
-      client.session.home ? client.home() : client.room();
+      client.returnToScreen();
+    }
+  });
+
+  //On privateChat
+  socket.on('privateChat', data => {
+    if (data.type === 'success') {
+      client.session.activeRoom = data.user;
+      client.clear();
+      sl.log(style.welcome(`Private chat with '${data.user}'`));
+      if (client.session.log[data.user]) {
+        client.drawLog(data.user)
+      }
+      client.privateRoom();
+    }
+    else if (data.type === 'userNotFound') {
+      client.returnToScreen();
+      sl.log(style.err('User not found.'));
+    }
+    else if (data.type === 'error') {
+      sl.log(style.err('Error'));
+    }
+    else {
+      sl.log(style.err('Error: Unknown'));
     }
   });
 

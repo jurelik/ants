@@ -425,6 +425,29 @@ module.exports = function(io) {
         }
       });
     });
+
+    //privateChat event
+    socket.on('privateChat', data => {
+      server.verifyToken(data, socket.id, (err, decoded) => {
+        if (!err) {
+          User.findOne({name: data.user}, (err, res) => {
+            if (!err && res) {
+              socket.emit('privateChat', {type: 'success', user: data.user});
+            }
+            else if (!err && !res) {
+              socket.emit('privateChat', {type: 'userNotFound'});
+            }
+            else {
+              socket.emit('privateChat', {type: 'error'});
+            }
+          })
+        }
+        else {
+          socket.emit('tokenNotValid');
+          server.disconnect(socket);
+        }
+      });
+    });
   
     //msgInit event
     socket.on('msgInit', data => {
