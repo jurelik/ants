@@ -615,9 +615,21 @@ function generateLongtermKeyPair(name) {
 function writeKeyPairToFile(name, pubKey, pvtKey) {
   const user = {name, pubKey, pvtKey};
   const json = JSON.stringify(user, null, 2);
-  fs.writeFile(__dirname + `/${name}.ant`, json, 'utf8', err => {
-    if (err) throw err;
-  });
+
+  if (!fs.existsSync(__dirname + '/userData')) {
+    fs.mkdir(__dirname + '/userData', err => {
+      if (err) throw err;
+
+      fs.writeFile(__dirname + `/userData/${name}.ant`, json, 'utf8', err => {
+        if (err) throw err;
+      });
+    });
+  }
+  else {
+    fs.writeFile(__dirname + `/userData/${name}.ant`, json, 'utf8', err => {
+      if (err) throw err;
+    });
+  }
 }
 
 //Create room
