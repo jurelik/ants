@@ -9,6 +9,7 @@ const UserSchema = new Schema({
   salt: String,
   online: Boolean,
   pubKey: String,
+  longtermPubKey: String,
   mute: Array
 });
 

@@ -2,6 +2,7 @@ const sl = require('staylow');
 const io = require('socket.io-client');
 const crypto = require('crypto');
 const style = require('./style');
+const fs = require('fs');
 
 sl.options({
   defaultPrompt: '',
@@ -12,9 +13,10 @@ sl.pause();
 
 let session = {
   activeRoom: '',
+  allRooms: {},
   connected: false,
   log: {},
-  user: {}
+  user: {},
 }
 
 module.exports = {
@@ -28,6 +30,7 @@ module.exports = {
   drawLog,
   hashLoginPassword,
   hashRegisterPassword,
+  writeKeyPairToFile,
   hashRoomPassword,
   generateRSAKeyPair,
   createRoom,
@@ -38,12 +41,6 @@ module.exports = {
 
 const socket = io('http://localhost:4000', {reconnectionAttempts: 3});
 const events = require('./events')(socket);
-// let exec = require('child_process').exec;
-
-// exec('afplay /System/Library/Sounds/Pop.aiff', (err, stdout, stderr) => {
-//   // sl.log(stdout);
-// });
-
 
 //
 //Function declarations
@@ -143,7 +140,7 @@ _,-'     \\_/_|_  |\\   |\`. /   \`._,--===--.__
     let name = res;
 
     if(regex.test(name) && name.length >= 3 && name.length <= 15) {
-      hashRegisterPassword(name);
+      generateLongtermKeyPair(name);
     }
     else if (res === ':q' || res === ':Q') {
       sl.log('Shutting down.');
@@ -424,58 +421,63 @@ function privateRoom() {
   session.activeScreen = 'privateRoom';
   setTitle(session.activeRoom);
   sl.prompt('', res => {
-    if (res.startsWith(':join ')) {
-      let room = res.slice(6);
-      socket.emit('join', {room, user: session.user, token: session.token});
-    }
-    else if (res === ':check' || res === ':c') {
-      Object.keys(session.log).forEach(room => {
-        if (room != 'home' && !session.log[room].private) {
-          sl.log(style.ls(`• ${room} (${session.log[room].unread} unread messages)`));
-        }
-      });
-      privateRoom();
-    }
-    else if (res.startsWith(':switch ')) {
-      let _room = res.slice(8);
-      socket.emit('switch', {room: _room, token: session.token});
-    }
-    else if (res.startsWith(':s ')) {
-      let _room = res.slice(3);
-      socket.emit('switch', {room: _room, token: session.token});
-    }
-    else if (res.startsWith(':p ')) {
-      let array = res.split(' ');
-      let user = array[1];
-      let msg = array.slice(2).join(' ');
-      sl.addToHistory(`:p ${user} `);
-      session.msg = msg;
-      session.to = user;
-      socket.emit('msgInit', {dest: user, visible: 'private', token: session.token});
-      privateRoom();
-    }
-    else if (res.startsWith(':pc ')) {
-      let user = res.slice(4);
-      socket.emit('privateChat', {user, token: session.token});
-    }
-    else if (res === ':home') {
-      clear();
-      drawLog('home');
-      home();
-    }
-    else if (res === ':q' || res === ':Q') {
-      sl.log('Shutting down.');
-      process.exit();
-    }
-    else if (res.startsWith(':mute ')) {
-      let user = res.slice(6);
-      socket.emit('mute', {user, token: session.token});
-      room();
-    }
-    else if (res.startsWith(':unmute ')) {
-      let user = res.slice(8);
-      socket.emit('unmute', {user, token: session.token});
-      home();
+    if (res.startsWith(':')) {
+      if (res.startsWith(':join ')) {
+        let room = res.slice(6);
+        socket.emit('join', {room, user: session.user, token: session.token});
+      }
+      else if (res === ':check' || res === ':c') {
+        Object.keys(session.log).forEach(room => {
+          if (room != 'home' && !session.log[room].private) {
+            sl.log(style.ls(`• ${room} (${session.log[room].unread} unread messages)`));
+          }
+        });
+        privateRoom();
+      }
+      else if (res.startsWith(':switch ')) {
+        let _room = res.slice(8);
+        socket.emit('switch', {room: _room, token: session.token});
+      }
+      else if (res.startsWith(':s ')) {
+        let _room = res.slice(3);
+        socket.emit('switch', {room: _room, token: session.token});
+      }
+      else if (res.startsWith(':p ')) {
+        let array = res.split(' ');
+        let user = array[1];
+        let msg = array.slice(2).join(' ');
+        sl.addToHistory(`:p ${user} `);
+        session.msg = msg;
+        session.to = user;
+        socket.emit('msgInit', {dest: user, visible: 'private', token: session.token});
+        privateRoom();
+      }
+      else if (res.startsWith(':pc ')) {
+        let user = res.slice(4);
+        socket.emit('privateChat', {user, token: session.token});
+      }
+      else if (res === ':home') {
+        clear();
+        drawLog('home');
+        home();
+      }
+      else if (res === ':q' || res === ':Q') {
+        sl.log('Shutting down.');
+        process.exit();
+      }
+      else if (res.startsWith(':mute ')) {
+        let user = res.slice(6);
+        socket.emit('mute', {user, token: session.token});
+        privateRoom();
+      }
+      else if (res.startsWith(':unmute ')) {
+        let user = res.slice(8);
+        socket.emit('unmute', {user, token: session.token});
+        privateRoom();
+      }
+      else {
+        sl.log(`Command not found, type ':h' for help`);
+      }
     }
     else {
       session.msg = res;
@@ -528,19 +530,17 @@ function hashLoginPassword(data) {
 }
 
 //Hash register password
-function hashRegisterPassword(name) {
-  sl.prompt('Enter password: ', true, res => {
-    //Hash password before sending to server
-    let salt = crypto.randomBytes(128).toString('base64');
-    crypto.pbkdf2(res, salt, 100000, 128, 'sha512', (err, derivedKey) => {
-      if (!err) {
-        socket.emit('register', {name, pw: derivedKey.toString('base64'), salt});
-      }
-      else {
-        sl.log('Error: ' + err);
-        register();
-      }
-    });
+function hashRegisterPassword(res, name, longtermPubKey) {
+  //Hash password before sending to server
+  let salt = crypto.randomBytes(128).toString('base64');
+  crypto.pbkdf2(res, salt, 100000, 128, 'sha512', (err, derivedKey) => {
+    if (!err) {
+      socket.emit('register', {name, pw: derivedKey.toString('base64'), salt, longtermPubKey});
+    }
+    else {
+      sl.log('Error: ' + err);
+      register();
+    }
   });
 }
 
@@ -582,6 +582,41 @@ function generateRSAKeyPair(data, derivedKey) {
       sl.log('Error: ' + err.message);
       login();
     }
+  });
+}
+
+//Generate long term RSA key pair
+function generateLongtermKeyPair(name) {
+  sl.prompt('Enter password: ', true, res => {
+    crypto.generateKeyPair('rsa', {
+      modulusLength: 4096,
+      publicKeyEncoding: {
+        type: 'spki',
+        format: 'pem'
+      },
+      privateKeyEncoding: {
+        type: 'pkcs8',
+        format: 'pem'
+      }
+    }, (err, longtermPubKey, longtermPvtKey) => {
+      if (!err) {
+        module.exports.tempLongtermPvtKey = longtermPvtKey;
+        hashRegisterPassword(res, name, longtermPubKey);
+      }
+      else {
+        sl.log('Error: ' + err.message);
+        login();
+      }
+    });
+  });
+}
+
+//Write long term RSA key pair to a file
+function writeKeyPairToFile(name, pubKey, pvtKey) {
+  const user = {name, pubKey, pvtKey};
+  const json = JSON.stringify(user, null, 2);
+  fs.writeFile(__dirname + `/${name}.ant`, json, 'utf8', err => {
+    if (err) throw err;
   });
 }
 
@@ -632,8 +667,7 @@ function createRoom(res) {
 }
 
 //Change bash title
-function setTitle(title)
-{
+function setTitle(title) {
   process.stdout.write(
     String.fromCharCode(27) + "]0;" + title + String.fromCharCode(7)
   );

@@ -41,12 +41,12 @@ module.exports = function(io) {
     socket.on('register', data => {
       let regex = /^\w+$/;
       if (regex.test(data.name) && data.name.length >= 3 && data.name.length <= 15) {
-        let user = new User({name: data.name, pw: data.pw, salt: data.salt, id: socket.id, pubKey: {}});
+        let user = new User({name: data.name, pw: data.pw, salt: data.salt, id: socket.id, pubKey: '', longtermPubKey: data.longtermPubKey});
         User.findOne({name: user.name}, (err, docs) => { //Check if user exists already
           if (!docs && !err) {
             user.save(err => {
               if (!err) {
-                socket.emit('register', {type: 'success'});
+                socket.emit('register', {type: 'success', name: data.name, longtermPubKey: data.longtermPubKey});
               }
               else {
                 socket.emit('register', {type: 'error', err});

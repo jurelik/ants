@@ -42,6 +42,7 @@ module.exports = function(socket) {
   //On register
   socket.on('register', data => {
     if (data.type === 'success') {
+      client.writeKeyPairToFile(data.name, data.longtermPubKey, client.tempLongtermPvtKey);
       client.login();
       sl.log(style.success('ACCOUNT CREATED'));
     }
