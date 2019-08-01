@@ -2,6 +2,7 @@ const sl = require('staylow');
 const User = require('./models/users');
 const Room = require('./models/rooms');
 const server = require('./index');
+const crypto = require('crypto');
 
 module.exports = function(io) {
   io.on('connection', socket => {
@@ -11,21 +12,30 @@ module.exports = function(io) {
     socket.on('login', data => {
       User.findOne({name: data.name}, (err, user) => {
         if (!err && user) { //If user exists
-          if (user.pw === data.pw && !user.online) { //If password is correct
-            User.updateOne({name: data.name}, {id: socket.id, pubKey: data.pubKey, online: true}, (err, raw) => { //Update id to current session socket.id
-              if (!err) {
-                server.createToken(data, socket);
-              }
-              else {
-                socket.emit('login', {type: 'error', err});
-              }
-            });
-          }
-          else if (user.pw === data.pw && user.online) {
-            socket.emit('login', {type: 'alreadyOnline'});
+          let verify = crypto.createVerify('SHA256');
+          verify.update(data.pw);
+          verify.end();
+
+          if (verify.verify(user.longtermPubKey, data.signature)) {
+            if (user.pw === data.pw && !user.online) { //If password is correct
+              User.updateOne({name: data.name}, {id: socket.id, pubKey: data.pubKey, online: true}, (err, raw) => { //Update id to current session socket.id
+                if (!err) {
+                  server.createToken(data, socket);
+                }
+                else {
+                  socket.emit('login', {type: 'error', err});
+                }
+              });
+            }
+            else if (user.pw === data.pw && user.online) {
+              socket.emit('login', {type: 'alreadyOnline'});
+            }
+            else {
+              socket.emit('login', {type: 'failed'});
+            }
           }
           else {
-            socket.emit('login', {type: 'failed'});
+            socket.emit('login', {type: 'wrongCredentials'});
           }
         }
         else if (!err && !user) {

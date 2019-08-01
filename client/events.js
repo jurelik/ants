@@ -33,6 +33,10 @@ module.exports = function(socket) {
       client.login();
       sl.log(style.err('USERNAME OR PASSWORD INCORRECT'));
     }
+    else if (data.type === 'wrongCredentials') {
+      client.login();
+      sl.log("User credentials don't match.");
+    }
     else {
       client.login();
       sl.log(style.err('ERROR: ' + data.err.message));

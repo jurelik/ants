@@ -576,13 +576,33 @@ function generateRSAKeyPair(data, derivedKey) {
     if (!err) {
       session.privateKey = privateKey;
       session.user.pubKey = publicKey;
-      socket.emit('login', {name: data.name, pw: derivedKey.toString('base64'), pubKey: publicKey});
+      signData(data, derivedKey);
+      // socket.emit('login', {name: data.name, pw: derivedKey.toString('base64'), pubKey: publicKey});
     }
     else {
       sl.log('Error: ' + err.message);
       login();
     }
   });
+}
+
+//Sign data with longterm private key
+function signData(data, derivedKey) {
+  if (fs.existsSync(__dirname + '/userData/' + data.name + '.ant')) {
+    let user = JSON.parse(fs.readFileSync(__dirname + '/userData/' + data.name + '.ant'));
+    session.longtermPvtKey = user.pvtKey;
+
+    let sign = crypto.createSign('SHA256');
+    sign.update(derivedKey.toString('base64'));
+    sign.end();
+    const signature = sign.sign(session.longtermPvtKey);
+
+    socket.emit('login', {name: data.name, pw: derivedKey.toString('base64'), signature, pubKey: session.user.pubKey});
+  }
+  else {
+    login();
+    sl.log(style.err('User credentials not found.'));
+  }
 }
 
 //Generate long term RSA key pair
