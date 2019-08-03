@@ -144,6 +144,68 @@ module.exports = function(io) {
       });
     });
   
+    //Join Init event
+    socket.on('joinInit', data => {
+      server.verifyToken(data, socket.id, (err, decoded) => {
+        if (!err) {
+          Room.findOne({name: data.room}, (err, res) => {
+            if (!err && res && res.users.length === 0) {
+              socket.activeRoom = data.room;
+              res.users.push(data.user);
+              res.save(err => {
+                if (!err) {
+                  socket.emit('joinInit', {type: 'success', userList: res.users, room: data.room});
+                }
+              });
+            }
+            else if (!err && res && res.users.length != 0) {
+              socket.emit('joinInit', {type: 'compare', userList: res.users, room: data.room});
+            }
+            else if (!err && !res) {
+              socket.emit('joinInit', {type: 'notFound', room: data.room});
+            }
+            else {
+              socket.emit('joinInit', {type: 'error'});
+            }
+          });
+        }
+        else {
+          socket.emit('tokenNotValid');
+        }
+      });
+    });
+
+    //Compare request event
+    socket.on('compareRequest', data => {
+      server.verifyToken(data, socket.id, (err, decoded) => {
+        if (!err) {
+          socket.to(data.dest).emit('compareRequest', {type: 'request', pkg: data.pkg, signature: data.signature});
+        }
+        else {
+          socket.emit('tokenNotValid');
+        }
+      });
+    });
+
+    //Compare return event
+    socket.on('compareReturn', data => {
+      server.verifyToken(data, socket.id, (err, decoded) => {
+        if (!err) {
+          if (data.type === 'success') {
+            socket.to(data.to).emit('compareReturn', {type: 'success', userList: data.userList, signature: data.signature, from: data.from, room: data.room});
+          }
+          else if (data.type === 'listsNotMatching') {
+            sl.log('lmao');
+            socket.to(data.to).emit('compareReturn', {type: 'listsNotMatching', from: data.from, signature: data.signature});
+          }
+        }
+        else {
+          socket.emit('tokenNotValid');
+        }
+      });
+      
+    });
+
     //Join room event
     socket.on('join', data => {
       server.verifyToken(data, socket.id, (err, decoded) => {

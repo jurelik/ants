@@ -101,7 +101,7 @@ function createToken(data, socket) {
   jwt.sign({name: data.name}, privateKey, {algorithm: 'RS256', expiresIn: '1d', jwtid: socket.id}, (err, token) => {
     if (!err) {
       socket.username = data.name; //Save username so user can be removed from rooms on disconnect
-      socket.emit('login', {type: 'success', name: data.name, token: token, welcome: welcomeMsg});
+      socket.emit('login', {type: 'success', name: data.name, token, welcome: welcomeMsg});
     }
     else {
       socket.emit('login', {type: 'error', err});

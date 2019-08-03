@@ -3,6 +3,7 @@ const io = require('socket.io-client');
 const crypto = require('crypto');
 const style = require('./style');
 const fs = require('fs');
+const lodash = require('lodash');
 
 sl.options({
   defaultPrompt: '',
@@ -13,7 +14,7 @@ sl.pause();
 
 let session = {
   activeRoom: '',
-  allRooms: {},
+  rooms: {},
   connected: false,
   log: {},
   user: {},
@@ -33,6 +34,7 @@ module.exports = {
   writeKeyPairToFile,
   hashRoomPassword,
   generateRSAKeyPair,
+  signJoin,
   createRoom,
   setTitle,
   returnToScreen,
@@ -164,7 +166,9 @@ function home() {
     }
     else if (res.startsWith(':join ')) {
       let room = res.slice(6);
-      socket.emit('join', {room, user: session.user, token: session.token});
+      socket.emit('joinInit', {room, user: session.user, token: session.token});
+
+      // socket.emit('join', {room, user: session.user, signature, token: session.token});
     }
     else if (res.startsWith(':create ')) {
       createRoom(res);
@@ -538,8 +542,8 @@ function hashRegisterPassword(res, name, longtermPubKey) {
       socket.emit('register', {name, pw: derivedKey.toString('base64'), salt, longtermPubKey});
     }
     else {
+      login();
       sl.log('Error: ' + err);
-      register();
     }
   });
 }
@@ -577,7 +581,6 @@ function generateRSAKeyPair(data, derivedKey) {
       session.privateKey = privateKey;
       session.user.pubKey = publicKey;
       signData(data, derivedKey);
-      // socket.emit('login', {name: data.name, pw: derivedKey.toString('base64'), pubKey: publicKey});
     }
     else {
       sl.log('Error: ' + err.message);
@@ -591,6 +594,7 @@ function signData(data, derivedKey) {
   if (fs.existsSync(__dirname + '/userData/' + data.name + '.ant')) {
     let user = JSON.parse(fs.readFileSync(__dirname + '/userData/' + data.name + '.ant'));
     session.longtermPvtKey = user.pvtKey;
+    session.user.longtermPubKey = user.pubKey;
 
     let sign = crypto.createSign('SHA256');
     sign.update(derivedKey.toString('base64'));
@@ -725,4 +729,88 @@ function returnToScreen() {
 //Clear screen
 function clear() {
   process.stdout.write('\x1b[2J');
+}
+
+//Dual encrypt join
+function signJoin(dest, sender, userList, room) {
+  return new Promise((resolve, reject) => {
+    let senderID = sender.id;
+
+    const pkg = {sender, senderID, userList, room}; //pkg to send to everyone in room
+    let controlUserList = [];
+
+    let sign = crypto.createSign('SHA256');
+    sign.update(JSON.stringify(pkg));
+    sign.end();
+    const signature = sign.sign(session.longtermPvtKey);
+  
+    socket.emit('compareRequest', {dest, pkg, signature, token: session.token});
+
+    socket.on('compareReturn', data => {
+      let contacts = JSON.parse(fs.readFileSync(__dirname + '/userData/contacts.json'));
+      let sender;
+
+      if (data.type === 'success') {
+
+        for (let user in contacts) { //Check if user stored in contacts
+          if (user.name === data.from.name && user.longtermPubKey === data.from.longtermPubKey) {
+            sender = user;
+          }
+        }
+
+        if (sender) {
+          let verify = crypto.createVerify('SHA256');
+          verify.update(JSON.stringify(data.userList));
+          verify.end();
+
+          if (verify.verify(sender.longtermPubKey, data.signature)) {
+            controlUserList.push(data.from);
+
+            if (lodash.isEqual(userList, controlUserList)) {
+              clearTimeout(timer);
+              socket.emit('join', {room: data.room, user: session.user, token: session.token});
+              resolve();
+            }
+            else {
+              clearTimeout(timer);
+              reject('User lists not matching.');
+            }
+          }
+          else {
+            sl.log('oops');
+          }
+        }
+        else {
+          contacts.push(data.from);
+          let json = JSON.stringify(contacts, null, 2);
+          fs.writeFileSync(__dirname + '/userData/contacts.json', json, 'utf8');
+
+          let verify = crypto.createVerify('SHA256');
+          verify.update(JSON.stringify(data.userList));
+          verify.end()
+
+          if (verify.verify(data.from.longtermPubKey, data.signature)) {
+            controlUserList.push(data.from);
+
+            if (lodash.isEqual(userList, controlUserList)) {
+              clearTimeout(timer);
+              socket.emit('join', {room: data.room, user: session.user, token: session.token});
+              resolve();
+            }
+            else {
+              clearTimeout(timer);
+              reject('User lists not matching.');
+            }
+          }
+          else {
+            sl.log('oops');
+          }
+        }
+      }
+    });
+
+    let timer = setTimeout(() => {
+      reject('Timeout error.');
+    }, 5000);
+  });
 }

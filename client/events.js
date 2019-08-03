@@ -2,6 +2,8 @@ const sl = require('staylow');
 const crypto = require('crypto');
 const client = require('./client');
 const style = require('./style');
+const fs = require('fs');
+const lodash = require('lodash');
 
 module.exports = function(socket) {
   //On connect
@@ -116,6 +118,165 @@ module.exports = function(socket) {
     }
     else {
       sl.log(style.err('Error: Unknown'));
+    }
+  });
+
+  //On joinInit
+  socket.on('joinInit', data => {
+    sl.log(data.type);
+    if (data.type === 'success') {
+      client.session.rooms[data.room] = data.userList;
+      client.session.activeRoom = data.room;
+      client.session.log[data.room] = {};
+      client.session.log[data.room].private = false;
+      client.session.log[data.room].msg = [];
+      client.session.log[data.room].unread = 0;
+
+      client.room();
+      sl.log('Room successfully joined.');
+    }
+    else if (data.type === 'compare') {
+      data.userList.forEach(user => {
+        client.signJoin(user.id, client.session.user, data.userList, data.room).catch(err => {
+          client.returnToScreen();
+          sl.log(err);
+        });
+      });
+    }
+    else if (data.type === 'notFound') {
+      sl.log('Room not found.');
+      client.returnToScreen();
+    }
+    else if (data.type === 'error') {
+      sl.log('Error');
+      client.returnToScreen();
+    }
+    else {
+      sl.log('Error: Unknown');
+      client.returnToScreen();
+    }
+  });
+
+  //On compareRequest
+  socket.on('compareRequest', data => {
+    if (data.type === 'request') {
+      let contacts = JSON.parse(fs.readFileSync(__dirname + '/userData/contacts.json'));
+      let sender;
+
+      for (let user in contacts) { //Check if user stored in contacts
+        if (user.name === data.pkg.sender.name && user.longtermPubKey === data.pkg.sender.longtermPubKey) {
+          sender = user;
+        }
+      }
+
+      if (sender) {
+        let verify = crypto.createVerify('SHA256');
+        verify.update(JSON.stringify(data.pkg));
+        verify.end()
+
+        if (verify.verify(sender.longtermPubKey, data.signature)) {
+          if (lodash.isEqual(data.pkg.userList, client.session.rooms[data.pkg.room])) {
+            let sign = crypto.createSign('SHA256');
+            sign.update(JSON.stringify(client.session.rooms[data.pkg.room]));
+            sign.end()
+            let signature = sign.sign(client.session.longtermPvtKey);
+      
+            socket.emit('compareReturn', {type: 'success', userList: client.session.rooms[data.pkg.room], signature, from: client.session.user, to: data.pkg.senderID, room: data.pkg.room, token: client.session.token});
+          }
+          else {
+            let sign = crypto.createSign('SHA256');
+            sign.update('listsNotMatching');
+            sign.end()
+            let signature = sign.sign(client.session.longtermPvtKey);
+
+            socket.emit('compareReturn', {type: 'listsNotMatching', signature, from: client.session.user, to: data.pkg.senderID, token: client.session.token});
+          }
+        }
+        else {
+          if (lodash.isEqual(data.pkg.userList, client.session.rooms[data.pkg.room])) {
+            let sign = crypto.createSign('SHA256');
+            sign.update(JSON.stringify(client.session.rooms[data.pkg.room]));
+            sign.end()
+            let signature = sign.sign(client.session.longtermPvtKey);
+
+            sl.log(data.sender.name + "'s credentials don't match those stored in your contacts. Please make sure you're talking to the right person.");
+      
+            socket.emit('compareReturn', {type: 'success', userList: client.session.rooms[data.pkg.room], signature, from: client.session.user, to: data.pkg.senderID, room: data.pkg.room, token: client.session.token});
+          }
+          else {
+            let sign = crypto.createSign('SHA256');
+            sign.update('listsNotMatching');
+            sign.end()
+            let signature = sign.sign(client.session.longtermPvtKey);
+
+            socket.emit('compareReturn', {type: 'listsNotMatching', signature, from: client.session.user, to: data.pkg.senderID, token: client.session.token});
+          }
+        }
+      }
+      else {
+        contacts.push(data.pkg.sender);
+        let json = JSON.stringify(contacts, null, 2);
+        fs.writeFileSync(__dirname + '/userData/contacts.json', json, 'utf8');
+
+        let verify = crypto.createVerify('SHA256');
+        verify.update(JSON.stringify(data.pkg));
+        verify.end();
+
+        if (verify.verify(data.pkg.sender.longtermPubKey, data.signature)) {
+          if (lodash.isEqual(data.pkg.userList, client.session.rooms[data.pkg.room])) {
+            let sign = crypto.createSign('SHA256');
+            sign.update(JSON.stringify(client.session.rooms[data.pkg.room]));
+            sign.end()
+            let signature = sign.sign(client.session.longtermPvtKey);
+      
+            socket.emit('compareReturn', {type: 'success', userList: client.session.rooms[data.pkg.room], signature, from: client.session.user, to: data.pkg.senderID, room: data.pkg.room, token: client.session.token});
+          }
+          else {
+            let sign = crypto.createSign('SHA256');
+            sign.update('listsNotMatching');
+            sign.end()
+            let signature = sign.sign(client.session.longtermPvtKey);
+
+            socket.emit('compareReturn', {type: 'listsNotMatching', signature, from: client.session.user, to: data.pkg.senderID, token: client.session.token});
+          }
+        }
+        else {
+          if (lodash.isEqual(data.pkg.userList, client.session.rooms[data.pkg.room])) {
+            let sign = crypto.createSign('SHA256');
+            sign.update(JSON.stringify(client.session.rooms[data.pkg.room]));
+            sign.end()
+            let signature = sign.sign(client.session.longtermPvtKey);
+
+            sl.log(data.sender.name + "'s credentials don't match those stored in your contacts. Please make sure you're talking to the right person.");
+      
+            socket.emit('compareReturn', {type: 'success', userList: client.session.rooms[data.pkg.room], signature, from: client.session.user, to: data.pkg.senderID, room: data.pkg.room, token: client.session.token});
+          }
+          else {
+            let sign = crypto.createSign('SHA256');
+            sign.update('listsNotMatching');
+            sign.end()
+            let signature = sign.sign(client.session.longtermPvtKey);
+
+            socket.emit('compareReturn', {type: 'listsNotMatching', signature, from: client.session.user, to: data.pkg.senderID, token: client.session.token});
+          }
+        }
+      }
+    }
+    else if (data.type === 'accountNotFound') {
+      client.login();
+      sl.log('Your account is not found');
+    }
+    else if (data.type === 'wrongCredentials') {
+      client.login();
+      sl.log("User credentials don't match");
+    }
+    else if (data.type === 'error') {
+      client.login();
+      sl.log('Error');
+    }
+    else {
+      client.login();
+      sl.log('Error: Unknown');
     }
   });
 
