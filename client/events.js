@@ -163,16 +163,20 @@ module.exports = function(socket) {
       let contacts = JSON.parse(fs.readFileSync(__dirname + '/userData/contacts.json'));
       let sender;
 
-      for (let user in contacts) { //Check if user stored in contacts
+      contacts.forEach(user => {
         if (user.name === data.pkg.sender.name && user.longtermPubKey === data.pkg.sender.longtermPubKey) {
           sender = user;
         }
-      }
+      });
 
       if (sender) {
         let verify = crypto.createVerify('SHA256');
         verify.update(JSON.stringify(data.pkg));
         verify.end()
+
+        sl.log(data.pkg.userList);
+        sl.log('XXXXXXXXXX')
+        sl.log(client.session.rooms[data.pkg.room]);
 
         if (verify.verify(sender.longtermPubKey, data.signature)) {
           if (lodash.isEqual(data.pkg.userList, client.session.rooms[data.pkg.room])) {
@@ -252,6 +256,7 @@ module.exports = function(socket) {
             socket.emit('compareReturn', {type: 'success', userList: client.session.rooms[data.pkg.room], signature, from: client.session.user, to: data.pkg.senderID, room: data.pkg.room, token: client.session.token});
           }
           else {
+            sl.log('buh');
             let sign = crypto.createSign('SHA256');
             sign.update('listsNotMatching');
             sign.end()

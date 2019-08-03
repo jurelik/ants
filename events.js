@@ -150,13 +150,94 @@ module.exports = function(io) {
         if (!err) {
           Room.findOne({name: data.room}, (err, res) => {
             if (!err && res && res.users.length === 0) {
-              socket.activeRoom = data.room;
-              res.users.push(data.user);
-              res.save(err => {
-                if (!err) {
-                  socket.emit('joinInit', {type: 'success', userList: res.users, room: data.room});
+              let joined = false;
+              //Check if room is joined already
+              socket.allRooms.some(room => {
+                if (room === data.room) {
+                  joined = true;
+                  return true;
                 }
               });
+              if (!joined) { //If not joined yet
+                Room.findOne({name: data.room}, (err, res) => {
+                  if (!err && res && !res.private) {
+                    let banned = false;
+
+                    //Check if user is banned
+                    res.ban.some(user => {
+                      if (user === decoded.name) {
+                        banned = true;
+                        return true;
+                      }
+                    });
+
+                    if (!banned) {
+                      socket.activeRoom = data.room; //Change activeRoom
+                      socket.allRooms.push(data.room); //Add to list of all the rooms this socket has joined so far
+                      res.users.forEach(user => {
+                        socket.to(user.id).emit('msg', {type: 'userJoined', msg: `${decoded.name} joined the room.`, room: socket.activeRoom});
+                      });
+                      res.users.push(data.user);
+                      res.save(err => {
+                        if (!err) {
+                          socket.emit('joinInit', {type: 'success', room: data.room, userList: res.users, welcome: res.welcome});
+                        }
+                        else {
+                          socket.emit('join', {type: 'error', err});
+                        }
+                      });
+                    }
+                    else {
+                      socket.emit('join', {type: 'banned', room: data.room});
+                    }
+                  }
+                  else if (!err && res && res.private && res.pw) {
+                    let banned = false;
+
+                    //Check if user is banned
+                    res.ban.some(user => {
+                      if (user === decoded.name) {
+                        banned = true;
+                        return true;
+                      }
+                    });
+
+                    if (!banned) {
+                      socket.emit('join', {type: 'private', room: data.room, pw: true, salt: res.salt});
+                    }
+                    else {
+                      socket.emit('join', {type: 'banned', room: data.room});
+                    }
+                  }
+                  else if (!err && res && res.private && !res.pw) {
+                    let banned = false;
+
+                    //Check if user is banned
+                    res.ban.some(user => {
+                      if (user === decoded.name) {
+                        banned = true;
+                        return true;
+                      }
+                    });
+
+                    if (!banned) {
+                      socket.emit('join', {type: 'private', room: data.room, pw: false});
+                    }
+                    else {
+                      socket.emit('join', {type: 'banned', room: data.room});
+                    }
+                  }
+                  else if (!err && !res) {
+                    socket.emit('join', {type: 'notFound'})
+                  }
+                  else {
+                    socket.emit('join', {type: 'error', err})
+                  }
+                });
+              }
+              else {
+                socket.emit('join', {type: 'alreadyJoined'});
+              }
             }
             else if (!err && res && res.users.length != 0) {
               socket.emit('joinInit', {type: 'compare', userList: res.users, room: data.room});

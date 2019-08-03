@@ -751,7 +751,7 @@ function signJoin(dest, sender, userList, room) {
       let sender;
 
       if (data.type === 'success') {
-
+        sl.log('fuh');
         for (let user in contacts) { //Check if user stored in contacts
           if (user.name === data.from.name && user.longtermPubKey === data.from.longtermPubKey) {
             sender = user;
@@ -759,6 +759,7 @@ function signJoin(dest, sender, userList, room) {
         }
 
         if (sender) {
+          sl.log('suh');
           let verify = crypto.createVerify('SHA256');
           verify.update(JSON.stringify(data.userList));
           verify.end();
@@ -781,6 +782,7 @@ function signJoin(dest, sender, userList, room) {
           }
         }
         else {
+          sl.log('buh');
           contacts.push(data.from);
           let json = JSON.stringify(contacts, null, 2);
           fs.writeFileSync(__dirname + '/userData/contacts.json', json, 'utf8');
